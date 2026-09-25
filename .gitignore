@@ -1,0 +1,28 @@
+# Environment / secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Tooling / OS
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.log
+.DS_Store
+Thumbs.db
+
+# Model caches (downloaded by sentence-transformers)
+models/
+.cache/
+
+academic content/
+corpora/
+venv/
+.venv/
