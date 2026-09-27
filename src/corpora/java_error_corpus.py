@@ -2,7 +2,7 @@
 
 Provenance
 ----------
-These 50 patterns were **drafted by an LLM (OpenCode) on 2026-09-27**, not
+These 53 patterns were **drafted by an LLM (OpenCode) on 2026-09-27**, not
 hand-authored. ``README.md`` previously described this file as "50 hand-authored
 patterns"; that was accurate when the file existed and is not accurate now, so
 the line was corrected rather than left standing. If you edit the wording in
@@ -14,6 +14,18 @@ first-year Java student actually meets, and nothing in the system treats this as
 a measured dataset. That distinction matters when writing the paper - do not
 describe these as collected data, and do not report a retrieval score measured
 against them as if it generalised to real student error logs.
+
+Review status
+-------------
+Unreviewed, and one live test already showed why that matters. An early version of
+the first pattern showed a class calling a getter the snippet never defined; the
+tutor model retrieved the pattern, took its false premise as fact and told the
+student the method "isn't defined, so it's returning null". The snippet has since
+been corrected to a real unassigned-field bug, which is the case the pattern was
+meant to teach. The remaining snippets were checked for balanced braces, for
+methods called but never declared, and for default-value claims - all clean - but
+no Java compiler was available on the authoring machine, so **none of them has
+been compiled**. Do that before relying on the corpus.
 
 What a pattern is for
 ---------------------
@@ -106,25 +118,31 @@ def _p(
 JAVA_ERROR_CORPUS: list[dict[str, Any]] = [
     # --- Null references ----------------------------------------------------
     _p(
-        "NullPointerException when calling a method on an uninitialised object",
+        "NullPointerException on a field that is never assigned",
         "null-reference",
         "java.lang.NullPointerException",
         """
 class Student {
     String name;
-    void rename(String n) { this.name = n; }
+
+    public String getName() {
+        return this.name;
+    }
+
+    void rename(String n) {
+        this.name = n;
+    }
 }
 
 Student s = new Student();
 System.out.println(s.getName().length());
 """,
-        "An object reference can point at nothing at all while still being a "
-        "perfectly valid reference to hold. Which of the two objects on this line "
-        "was actually constructed, and which one is only a label pointing at an "
-        "empty slot?",
-        "A reference variable is created and assigned null by default; calling a "
-        "method on it dereferences nothing.",
-        ["null", "NullPointerException", "reference", "object", "initialisation"],
+        "The class does define the method being called, and it returns one of the "
+        "class's own fields. What is that field's value in a freshly constructed "
+        "object, given that nothing in the constructor ever set it?",
+        "A field of reference type holds null until assigned, and this constructor "
+        "assigns nothing.",
+        ["null", "NullPointerException", "field", "getter", "initialisation"],
         "beginner",
     ),
     _p(
@@ -629,7 +647,7 @@ task.run();
     _p(
         "Local variable used before it has been given a value",
         "scope",
-        "java.lang.IllegalStateException",
+        None,
         """
 int total;
 total = total + 5;
@@ -830,6 +848,42 @@ int score = marks.get("IPRT301") + 5;
         "amount to?",
         "Map.get returns null for an absent key, and null + int unboxes to NPE.",
         ["Map", "HashMap", "get", "null", "unboxing"],
+        "intermediate",
+    ),
+    _p(
+        "NullPointerException when unboxing a missing Integer in a loop",
+        "type-casting",
+        "java.lang.NullPointerException",
+        """
+Map<String, Integer> marks = new HashMap<>();
+List<String> keys = List.of("IPRT301", "PBDV301");
+int total = 0;
+for (String k : keys) {
+    total += marks.get(k);
+}
+""",
+        "The map is asked for a number and then that number is added to a running "
+        "total, which needs a primitive. What does the map hold for a key it has "
+        "never seen, and what must the language do to a wrapper before it can take "
+        "part in arithmetic?",
+        "Integer is a wrapper and must be unboxed; unboxing null throws.",
+        ["unboxing", "wrapper", "Integer", "Map", "autoboxing"],
+        "intermediate",
+    ),
+    _p(
+        "String method returns null and the caller chains straight on it",
+        "null-reference",
+        "java.lang.NullPointerException",
+        """
+Properties config = loadConfig();
+String host = config.getProperty("host").trim();
+""",
+        "The chain reads as though each call had something real to work on. What "
+        "does a lookup like this return for a key that is not present, and what does "
+        "the next call in the chain then receive?",
+        "Properties.getProperty returns null for an absent key, and the chained "
+        "trim() dereferences it.",
+        ["Properties", "getProperty", "null", "chain", "config"],
         "intermediate",
     ),
     _p(

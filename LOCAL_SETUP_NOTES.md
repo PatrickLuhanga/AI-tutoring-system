@@ -45,10 +45,12 @@ src/corpora` returned nothing.
 Only that one script imports it, so the gateway and retriever were unaffected —
 but `code_repair_patterns` stayed empty and the tier could never be loaded.
 
-**Resolved 2026-09-27.** The file is now present and committed. Its 50 patterns
-were drafted by an LLM, not hand-authored, so the corpus should be treated as
-unreviewed: read the hints before relying on them, and do not report a retrieval
-score measured against it as though it generalised to real student error logs.
+**Resolved 2026-09-27.** The file is now present and committed, with 53 patterns.
+They were drafted by an LLM, not hand-authored, so treat the corpus as
+unreviewed: read the hints before relying on them, compile the snippets if you
+can (no Java compiler was available when they were written), and do not report a
+retrieval score measured against it as though it generalised to real student
+error logs.
 
 Fix for the pattern (anchors it, consistent with `models/` and `.cache/` above):
 
