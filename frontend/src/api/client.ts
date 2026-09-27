@@ -24,7 +24,7 @@ import {
 
 const USE_MOCK = MOCK && import.meta.env.VITE_USE_MOCK !== 'false'
 
-const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY ?? 'dev-admin-key'
+const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY ?? 'change-me-admin-key'
 
 function delay<T>(value: T, ms = 450): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms))
