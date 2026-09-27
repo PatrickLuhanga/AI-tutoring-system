@@ -125,11 +125,40 @@ def create_vector_indexes() -> None:
                 logger.info("Vector index ready: %s (ivfflat fallback)", name)
 
 
+def ensure_hybrid_search_columns() -> None:
+    """Add the generated ``content_tsv`` columns to pre-existing tables.
+
+    ``create_all`` never alters an existing table, so a database created before
+    the hybrid-search port lacks the generated tsvector columns. Adding them
+    here rewrites the table and backfills the full-text index for every row.
+    On a fresh install ``create_all`` already created them and these statements
+    are no-ops.
+    """
+    statements = [
+        "ALTER TABLE curriculum_chunks "
+        "ADD COLUMN IF NOT EXISTS content_tsv tsvector "
+        "GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, chunk_text)) STORED",
+        "ALTER TABLE code_repair_patterns "
+        "ADD COLUMN IF NOT EXISTS content_tsv tsvector "
+        "GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, "
+        "(error_title || ' ' || broken_code || ' ' || conceptual_tutor_hint))) STORED",
+    ]
+    try:
+        with engine.begin() as conn:
+            for sql in statements:
+                conn.execute(text(sql))
+        logger.info("Hybrid-search tsvector columns ensured (curriculum_chunks, code_repair_patterns)")
+    except Exception as exc:  # noqa: BLE001 - schema upgrade should not block startup
+        logger.warning("Could not ensure hybrid-search tsvector columns: %s", exc)
+
+
 def create_secondary_indexes() -> None:
     statements = [
         "CREATE INDEX IF NOT EXISTS idx_curriculum_chunks_metadata ON curriculum_chunks USING gin (doc_metadata jsonb_path_ops)",
         "CREATE INDEX IF NOT EXISTS idx_code_patterns_tags ON code_repair_patterns USING gin (tags)",
         "CREATE INDEX IF NOT EXISTS idx_curriculum_chunks_text_trgm ON curriculum_chunks USING gin (chunk_text gin_trgm_ops)",
+        "CREATE INDEX IF NOT EXISTS idx_curriculum_chunks_tsv ON curriculum_chunks USING gin (content_tsv)",
+        "CREATE INDEX IF NOT EXISTS idx_code_patterns_tsv ON code_repair_patterns USING gin (content_tsv)",
     ]
     with engine.begin() as conn:
         for sql in statements:
@@ -229,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     create_extension()
     create_tables(drop=args.drop)
     sync_enum_constraints()
+    ensure_hybrid_search_columns()
     create_vector_indexes()
     create_secondary_indexes()
     if not args.skip_modules:

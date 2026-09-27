@@ -23,6 +23,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Computed,
     DateTime,
     Float,
     ForeignKey,
@@ -34,7 +35,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from .config import settings
@@ -304,6 +305,13 @@ class CurriculumChunk(Base):
 
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Generated full-text vector feeding the keyword branch of hybrid search
+    # (see src/retriever.py). ``simple`` config: language-agnostic, no stemming.
+    content_tsv: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('simple'::regconfig, chunk_text)", persisted=True),
+        nullable=True,
+    )
     token_count: Mapped[Optional[int]] = mapped_column(Integer)
     content_hash: Mapped[Optional[str]] = mapped_column(String(64))
 
@@ -339,6 +347,17 @@ class CodeRepairPattern(Base):
 
     broken_code: Mapped[str] = mapped_column(Text, nullable=False)
     conceptual_tutor_hint: Mapped[str] = mapped_column(Text, nullable=False)
+    # Generated full-text vector over the pattern's searchable prose + code,
+    # mirroring curriculum_chunks.content_tsv.
+    content_tsv: Mapped[str] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('simple'::regconfig, "
+            "(error_title || ' ' || broken_code || ' ' || conceptual_tutor_hint))",
+            persisted=True,
+        ),
+        nullable=True,
+    )
     common_cause: Mapped[Optional[str]] = mapped_column(Text)
     tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     difficulty: Mapped[Optional[str]] = mapped_column(String(16))
