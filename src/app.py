@@ -17,6 +17,8 @@ Routes
 ``GET  /api/health``                liveness / readiness probe
 ``GET/POST /api/admin/llm-config``  switch Cloud <-> Local LLM, rotate API key
 ``GET  /api/admin/ollama-models``   list local Ollama models for the dropdown
+``GET  /api/tutor/questions``       queue of questions RAG could not ground
+``POST /api/tutor/questions/<id>/answer``  answer one, optionally promoting it
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ import sys
 from flask import Flask, jsonify, request
 
 from .agents import TutoringWorkflow
-from .api import admin_bp, chat_bp
+from .api import admin_bp, chat_bp, tutor_bp
 from .auth import AuthError
 from .config import settings
 from .db import check_connection
@@ -192,6 +194,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(chat_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(tutor_bp)
     _register_meta_routes(app)
     _register_error_handlers(app)
     _configure_cors(app)

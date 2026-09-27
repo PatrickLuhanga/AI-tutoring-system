@@ -61,6 +61,19 @@ FEEDBACK_REASON_TAGS = (
     "incorrect_answer",
 )
 
+#: Why a student question could not be grounded in course material. Drives the
+#: tutor-facing queue of questions that need a human (or lecturer) answer.
+UNGROUNDED_REASONS = (
+    "no_context",            # nothing passed the module filter / distance floor
+    "below_threshold",       # chunks found but none close enough to trust
+    "third_party_only",      # only commercial material was available
+    "low_confidence",        # tutor/guardrail judged the grounding weak
+    "student_flagged",       # the student reported the answer as wrong
+)
+
+#: Lifecycle of a queued question.
+UNGROUNDED_STATUSES = ("open", "answered", "dismissed", "duplicate")
+
 #: Inference providers the Dynamic LLM Router can target.
 LLM_PROVIDERS = ("local", "cloud")
 #: Cloud API flavours understood by the router.
@@ -231,6 +244,16 @@ class TelemetryLog(Base):
 
     embedding_model: Mapped[Optional[str]] = mapped_column(String(128))
     response_latency_ms: Mapped[Optional[int]] = mapped_column(Integer)
+
+    #: Provenance classes present in the prompt context (e.g. ``["slides"]``).
+    #: Lets the Admin report a grounding rate in faculty-approved material
+    #: against third-party material.
+    retrieval_categories: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    #: True when the module's own material yielded nothing and the retriever
+    #: widened the search to third-party content.
+    third_party_fallback: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -273,6 +296,72 @@ class HintFeedback(Base):
     )
 
 
+class UnansweredQuestion(Base):
+    """A student question the tutor could not ground in course material.
+
+    Closes the loop described in section 17 (Human Adjustment Cycle): when
+    retrieval returns nothing trustworthy, the question is queued here instead of
+    being answered from the model's parametric memory. A tutor - escalating to the
+    module lecturer when needed - supplies the answer, and can promote it into
+    ``curriculum_chunks`` so later students are answered from real course material.
+
+    Repeated identical questions increment ``occurrences`` rather than adding rows,
+    so the queue is ranked by demand instead of by noise.
+    """
+
+    __tablename__ = "unanswered_questions"
+
+    question_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    module_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("modules.module_id", ondelete="CASCADE")
+    )
+    student_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("students.student_id", ondelete="SET NULL")
+    )
+
+    session_id: Mapped[Optional[str]] = mapped_column(String(64))
+    message_id: Mapped[Optional[str]] = mapped_column(String(64))
+
+    #: The student's own words. Telemetry deliberately stays lean, so this is
+    #: where the raw question text is preserved for the tutor to read.
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Normalised form of the question, used to collapse duplicates.
+    question_key: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    intent: Mapped[Optional[str]] = mapped_column(String(32))
+    reason: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="no_context"
+    )
+    #: Closest cosine distance seen while searching; ``None`` when nothing matched.
+    best_distance: Mapped[Optional[float]] = mapped_column(Float)
+    occurrences: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="open")
+    answer_text: Mapped[Optional[str]] = mapped_column(Text)
+    answered_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("students.student_id", ondelete="SET NULL")
+    )
+    answered_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
+    #: Set once the answer has been written into ``curriculum_chunks``.
+    promoted_chunk_id: Mapped[Optional[int]] = mapped_column(BigInteger)
+
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        _enum_check("reason", UNGROUNDED_REASONS, "ck_unanswered_reason"),
+        _enum_check("status", UNGROUNDED_STATUSES, "ck_unanswered_status"),
+        # One open row per distinct question per module; duplicates bump the count.
+        UniqueConstraint("module_id", "question_key", name="uq_unanswered_open"),
+        Index("ix_unanswered_status_module", "status", "module_id"),
+        Index("ix_unanswered_module_time", "module_id", "created_at"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Vector store
 # ---------------------------------------------------------------------------
@@ -296,6 +385,21 @@ class CurriculumChunk(Base):
     topic: Mapped[Optional[str]] = mapped_column(String(255))
     section_title: Mapped[Optional[str]] = mapped_column(String(512))
 
+    #: Provenance label derived from the second-level content folder
+    #: (``slides`` / ``books`` / ``exercises`` / ``examples`` / ...). Lets the
+    #: retriever prefer the module's own teaching material and lets analytics
+    #: report a grounding rate per provenance class.
+    source_category: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="notes", server_default="notes"
+    )
+
+    #: True when this chunk contains a worked answer, model solution or marking
+    #: guidance. Withheld by the retriever until the Scaffolding Engine reaches the
+    #: Explanation stage so retrieval cannot hand the model a finished solution.
+    is_answer: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[Optional[int]] = mapped_column(Integer)
@@ -313,6 +417,10 @@ class CurriculumChunk(Base):
         UniqueConstraint("source_file", "chunk_index", name="uq_curriculum_chunk"),
         Index("ix_curriculum_chunks_module", "module_id"),
         Index("ix_curriculum_chunks_source", "source_file"),
+        # Supports the Socratic-stage and provenance filters the retriever applies
+        # before the similarity search.
+        Index("ix_curriculum_chunks_module_answer", "module_id", "is_answer"),
+        Index("ix_curriculum_chunks_module_category", "module_id", "source_category"),
     )
 
 

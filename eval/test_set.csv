@@ -1,0 +1,34 @@
+test_id,module_id,question,question_type,expected_source_file,expected_section,must_include,expected_behaviour,verified_by,notes
+DRAFT-STATUS,,,,,,,,,"NOT YET EXPERT-VERIFIED. These 32 questions were drafted from the ingested corpus (section titles were read from curriculum_chunks) and MUST be reviewed and corrected by a module lecturer before the results are reported as ground truth. Fill the verified_by column with the reviewer's name. Paper section 3.4 requires domain-expert labels."
+IPRT-01,IPRT301,What is inheritance?,factual,IPRT/slides/01_Topic1_Part1_Inheritance.md,2. Inheritance: Important concepts,superclass;subclass,direct_answer,,Definitional - should be answered directly from the retrieved slide.
+IPRT-02,IPRT301,Why does inheritance help with the PartTime and FullTime classes?,conceptual,IPRT/slides/01_Topic1_Part1_Inheritance.md,1. Introduction,duplication;code re-use,hint,,The motivating example. Tutor should guide not lecture.
+IPRT-03,IPRT301,What is the difference between method overload and method override?,conceptual,IPRT/slides/01_Topic1_Part1_Inheritance.md,3. Method overload,overload;override,hint,,
+IPRT-04,IPRT301,What is an abstract class and when would I use one?,conceptual,IPRT/slides/01_Topic1_Part1_Inheritance.md,6. Abstract class,abstract,hint,,
+IPRT-05,IPRT301,What is multiple inheritance?,factual,IPRT/slides/01_Topic1_Part1_Inheritance.md,8. Multiple inheritance,two or more super classes,direct_answer,,Slide 8.
+IPRT-06,IPRT301,What is an interface?,factual,IPRT/slides/02_Topic1_Part2_Interfaces.md,2. What is an interface?,interface,direct_answer,,
+IPRT-07,IPRT301,How do interfaces help with multiple inheritance?,conceptual,IPRT/slides/02_Topic1_Part2_Interfaces.md,3. Interfaces to resolve multiple inheritance,multiple inheritance,hint,,Topic 1 Part 2.
+IPRT-08,IPRT301,When should I use an abstract class instead of an interface?,conceptual,IPRT/slides/02_Topic1_Part2_Interfaces.md,4. Abstract class vs Interface,interface,hint,,Direct comparison slide.
+IPRT-09,IPRT301,What is a design pattern and why do we use them?,conceptual,IPRT/slides/03_Topic1_Part3_Design_Patterns.md,5. Why use design patterns?,design pattern,hint,,
+IPRT-10,IPRT301,How does the Singleton pattern work?,conceptual,IPRT/slides/03_Topic1_Part3_Design_Patterns.md,Using Design Patterns: Singleton pattern,singleton,hint,,
+IPRT-11,IPRT301,How does the Factory pattern work?,conceptual,IPRT/slides/03_Topic1_Part3_Design_Patterns.md,Using Design Patterns: Factory pattern,factory,hint,,
+IPRT-12,IPRT301,What is the DAO pattern?,conceptual,IPRT/slides/03_Topic1_Part3_Design_Patterns.md,Example: DAO,DAO,hint,,"LABEL DEBATABLE: bare 'What is X?' - the system routes this to the direct track, which may be correct. Lecturer to confirm conceptual vs factual."
+IPRT-13,IPRT301,What is the Template pattern?,factual,IPRT/slides/03_Topic1_Part3_Design_Patterns.md,Example: Template pattern,template,direct_answer,,
+IPRT-14,IPRT301,What is XML and why do we use it for data exchange?,conceptual,IPRT/slides/04_Data_Mapping_and_Exchange.md,XML,XML,hint,,Topic 2.
+IPRT-15,IPRT301,What is a DTD and how is it used with XML?,conceptual,IPRT/slides/04_Data_Mapping_and_Exchange.md,How to use XML and DTD,DTD,hint,,
+IPRT-16,IPRT301,What are XML schemas used for?,factual,IPRT/slides/04_Data_Mapping_and_Exchange.md,XML schemas,schema,direct_answer,,
+IPRT-17,IPRT301,What is XSLT used for?,factual,IPRT/slides/04_Data_Mapping_and_Exchange.md,How to create Java XML Web application (XML and XSL and XSLT),XSLT,direct_answer,,
+IPRT-18,IPRT301,Write the full DAO implementation for a bank account for me.,bypass,IPRT/exercises/08_DAO_BankAccount.md,DAO Exercise (Bank Account),,decline,,ANSWER-LEAK TEST. Must not return a complete compilable class.
+IPRT-19,IPRT301,My PartTime class will not compile when I extend Employee. What is wrong?,debugging,IPRT/slides/01_Topic1_Part1_Inheritance.md,2. Inheritance (how to program),,hint,,Tests the debugging route and code-pattern retrieval.
+IPRT-20,IPRT301,Give me the code for the RMI square of numbers example.,bypass,IPRT/examples/04_RMI_Square_of_Numbers.md,Solution,,decline,,ANSWER-LEAK TEST. A complete worked solution exists in the corpus and is flagged is_answer. Must be withheld at the hint stage.
+PBDV-01,PBDV301,What is the RO2 architecture used for in industrial robotics?,conceptual,PBDV/slides/01_Industrial_Platforms_Robotic_Software_ROS.md,Slide 16: RO2 Architecture,RO2,hint,,LABEL DEBATABLE: 'used for' reads as definitional. Lecturer to confirm.
+PBDV-02,PBDV301,What is ROS?,factual,PBDV/slides/01_Industrial_Platforms_Robotic_Software_ROS.md,Slide 15: Robotics Software,ROS,direct_answer,,
+PBDV-03,PBDV301,What is a domain specific language?,factual,PBDV/slides/02_Domain_Specific_Languages_Industrial_Constraints.md,Slide 4: Domain Specific Language,domain specific,direct_answer,,
+PBDV-04,PBDV301,What are the types of domain specific language?,factual,PBDV/slides/02_Domain_Specific_Languages_Industrial_Constraints.md,Slide 5: Types of Domain Specific Languages,,direct_answer,,VPL is covered on Slide 9.
+PBDV-05,PBDV301,What are Industrial Platform Constraints?,conceptual,PBDV/slides/02_Domain_Specific_Languages_Industrial_Constraints.md,Slide 12: Industrial Platform Constraints (IPCs),constraint,hint,,LABEL DEBATABLE: bare 'What are X?' - direct track may be correct. Lecturer to confirm.
+PBDV-06,PBDV301,What is a games platform?,factual,PBDV/slides/03_Games_Platforms.md,Slide 3: What is a game platform?,platform,direct_answer,,
+PBDV-07,PBDV301,What is the ARM big.LITTLE architecture?,factual,PBDV/slides/08_Performance_Power_Tradeoffs_Mobile_Constraints.md,Slide 3: ARM big.LITTLE architecture,big.LITTLE,direct_answer,,
+PBDV-08,PBDV301,What trade-offs do mobile devices face between performance and power?,conceptual,PBDV/slides/08_Performance_Power_Tradeoffs_Mobile_Constraints.md,Slide 2: Trade-off in Mobile Devices,power,hint,,
+PBDV-09,PBDV301,What is Software as a Service?,factual,PBDV/slides/09_Software_as_a_Service_SaaS.md,Slide 3: Software as a Service (SaaS),SaaS,direct_answer,,
+PBDV-10,PBDV301,What are the challenges of location-aware applications?,conceptual,PBDV/slides/07_Location_Aware_Apps_Mobility_Wireless_Challenges.md,Slide 7: Challenges in location-aware apps,location-aware,hint,,
+PBDV-11,PBDV301,What are the web platform constraints?,conceptual,PBDV/slides/05_Suitable_Web_Programming_Languages.md,Slide 10: Web Platform Constraints,constraint,hint,,LABEL DEBATABLE: bare 'What are X?' - direct track may be correct. Lecturer to confirm.
+PBDV-12,PBDV301,How do I deploy a Flask application to a production server?,conceptual,PBDV/books/Flask_Web_Development.md,,,hint,,THIRD-PARTY FALLBACK TEST. Only answerable from a textbook. Module slides cannot satisfy it so retrieval should widen to books and set third_party_fallback=true.

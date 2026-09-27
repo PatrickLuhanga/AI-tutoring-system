@@ -103,7 +103,10 @@ SUPPORTED_TEXT_EXTENSIONS = {
     ".pptx",
     ".txt",
     ".md",
+    ".markdown",
     ".java",
+    ".py",
+    ".ipynb",
     ".csv",
     ".html",
     ".htm",
@@ -218,9 +221,30 @@ class Settings:
     ollama_circuit_reset_timeout: float
     ollama_health_timeout: int
 
+    # Ollama "thinking" models (qwen3, deepseek-r1, ...) emit a reasoning
+    # channel before the answer. Left on, they burn the whole num_predict
+    # budget reasoning and return an empty `content`, which the router reads
+    # as a failure. See _generate_ollama in src/llm_router.py.
+    ollama_think: bool
+
     # Retrieval
     retrieval_top_k: int
     retrieval_code_top_k: int
+    #: Cosine-distance ceiling for a retrieved chunk to be trusted. A chunk further
+    #: away than this is treated as "no relevant course material" rather than being
+    #: pasted into the prompt as if it were relevant. 0 disables the floor.
+    retrieval_max_distance: float
+    #: Third-party material (currently ``source_category='books'``) is excluded by
+    #: default so the tutor prefers the module's own faculty-approved material.
+    retrieval_include_third_party: bool
+    #: When the filtered search returns nothing, retry including third-party
+    #: material rather than answering with an empty context.
+    retrieval_third_party_fallback: bool
+    #: pgvector HNSW behaviour when a metadata filter is applied. ``off`` silently
+    #: returns fewer rows than ``top_k``; ``strict_order`` fixes that. Requires
+    #: pgvector >= 0.8.
+    hnsw_iterative_scan: str
+    hnsw_ef_search: int
 
     # Guardrail
     guardrail_enabled: bool
@@ -294,8 +318,14 @@ def _build_settings() -> Settings:
         ollama_circuit_failure_threshold=_int("OLLAMA_CIRCUIT_FAILURE_THRESHOLD", 3),
         ollama_circuit_reset_timeout=_float("OLLAMA_CIRCUIT_RESET_TIMEOUT", 30.0),
         ollama_health_timeout=_int("OLLAMA_HEALTH_TIMEOUT", 5),
+        ollama_think=_bool("OLLAMA_THINK", False),
         retrieval_top_k=_int("RETRIEVAL_TOP_K", 3),
         retrieval_code_top_k=_int("RETRIEVAL_CODE_TOP_K", 3),
+        retrieval_max_distance=_float("RETRIEVAL_MAX_DISTANCE", 0.75),
+        retrieval_include_third_party=_bool("RETRIEVAL_INCLUDE_THIRD_PARTY", False),
+        retrieval_third_party_fallback=_bool("RETRIEVAL_THIRD_PARTY_FALLBACK", True),
+        hnsw_iterative_scan=_str("HNSW_ITERATIVE_SCAN", "strict_order").lower(),
+        hnsw_ef_search=_int("HNSW_EF_SEARCH", 80),
         guardrail_enabled=_bool("GUARDRAIL_ENABLED", True),
         guardrail_max_code_lines=_int("GUARDRAIL_MAX_CODE_LINES", 8),
         guardrail_max_words=_int("GUARDRAIL_MAX_WORDS", 400),

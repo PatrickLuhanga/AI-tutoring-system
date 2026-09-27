@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
@@ -36,7 +37,42 @@ from .secrets_store import SecretStoreError, encrypt_secret, try_decrypt_secret
 logger = logging.getLogger(__name__)
 
 #: Re-exported for the many modules that historically imported it from here.
-__all__ = ["LLMError", "LLMResponse", "LLMConfigService", "LLMRouter", "get_router"]
+__all__ = [
+    "LLMError",
+    "LLMResponse",
+    "LLMConfigService",
+    "LLMRouter",
+    "get_router",
+    "strip_reasoning",
+]
+
+
+#: Reasoning models (qwen3, deepseek-r1, ...) can inline their chain of thought
+#: into the reply body. A student must never see the tutor's internal monologue -
+#: it is confusing, it leaks the hidden Scaffolding instructions, and it burns the
+#: response budget. Anything up to a closing ``</think>`` is discarded.
+_THINK_BLOCK_RE = re.compile(
+    r"<(think|thinking|reasoning|scratchpad)\b[^>]*>.*?"
+    r"(?:</\1\s*>|(?=\Z))",
+    re.IGNORECASE | re.DOTALL,
+)
+#: A stray closing tag with no opener (some runtimes split the channels oddly).
+_ORPHAN_CLOSE_RE = re.compile(r"</(?:think|thinking|reasoning|scratchpad)\s*>", re.IGNORECASE)
+
+
+def strip_reasoning(text: Optional[str]) -> str:
+    """Remove any leaked chain-of-thought from a model reply.
+
+    Best-effort and deliberately aggressive: a reply that loses a stray tag is far
+    better than one that shows the student its own prompt scaffolding.
+    """
+    if not text:
+        return ""
+    cleaned = _THINK_BLOCK_RE.sub("", text)
+    if _ORPHAN_CLOSE_RE.search(cleaned):
+        # A closing tag with no opener: everything before it was reasoning.
+        cleaned = _ORPHAN_CLOSE_RE.split(cleaned, maxsplit=1)[-1]
+    return cleaned.strip()
 
 
 @dataclass(slots=True)
@@ -405,6 +441,13 @@ class LLMRouter:
                 "temperature": temperature,
                 "top_p": config.top_p,
                 "num_predict": max_tokens,
+                # Reasoning models (qwen3, deepseek-r1, ...) emit a `thinking`
+                # channel that would otherwise be inlined into `content` and shown
+                # to the student. This flag must sit INSIDE `options` on Ollama
+                # 0.34.x - as a sibling of `options` it is silently ignored and the
+                # reasoning leaks into the reply. Ignored by models with no
+                # thinking channel.
+                "think": settings.ollama_think,
             },
         }
         if json_mode:
@@ -412,9 +455,17 @@ class LLMRouter:
 
         data = client.post_json("/api/chat", body)
 
-        text = (data.get("message") or {}).get("content")
+        message = data.get("message") or {}
+        text = message.get("content")
+        text = strip_reasoning(text)
         if not text:
-            raise LLMError(f"Ollama returned an empty response from {url}.")
+            # A reasoning model can burn the whole num_predict budget thinking and
+            # return nothing. Surface that instead of an empty hint.
+            raise LLMError(
+                f"Ollama returned an empty response from {url} "
+                f"(model={config.local_model}). If this is a reasoning model, raise "
+                f"LLM_MAX_TOKENS so the thinking channel leaves room for the answer."
+            )
         return text, "ollama"
 
     # -- Cloud --------------------------------------------------------------
@@ -433,8 +484,16 @@ class LLMRouter:
             )
 
         if config.cloud_provider == "anthropic":
-            return self._generate_anthropic(config, messages, api_key, temperature, max_tokens)
-        return self._generate_openai(config, messages, api_key, temperature, max_tokens)
+            text, backend = self._generate_anthropic(
+                config, messages, api_key, temperature, max_tokens
+            )
+        else:
+            text, backend = self._generate_openai(
+                config, messages, api_key, temperature, max_tokens
+            )
+        # A reasoning model served through an OpenAI-compatible endpoint (e.g.
+        # deepseek-r1) can inline its chain of thought the same way Ollama does.
+        return strip_reasoning(text), backend
 
     def _generate_openai(
         self,

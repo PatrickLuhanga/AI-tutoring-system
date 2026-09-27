@@ -61,7 +61,10 @@ _BYPASS_RE = re.compile(
     r"write (my|the) (assignment|essay|report)|do my (homework|assignment)|"
     r"give me the (answer|code|solution)|just give me|"
     r"complete (solution|code)|full (solution|code)|final code|"
-    r"write the (full|entire|whole) (program|code|solution)|"
+    # "write the full DAO implementation" / "write me a complete answer": the
+    # adjective plus any noun is a demand for the finished artefact.
+    r"write (?:me |us )?(?:the |a |an )?(?:full|entire|whole|complete)\b|"
+    r"implement (?:this|it|the whole) for me|"
     r"solve (this|it) for me|paste the answer"
     r")\b"
 )
@@ -91,17 +94,43 @@ _PROBLEM_RE = re.compile(
     r"design a|come up with a)\b"
 )
 #: Definitional / acronym-expansion / syllabus-fact patterns -> direct track.
+#: Deliberately narrow: a question is only "factual" when recalling a definition is
+#: the whole point. Anything that also asks for reasoning is caught earlier by
+#: :data:`_REASONING_RE`. ``difference between`` used to appear here as well as in
+#: :data:`_CONCEPT_RE`; because the factual test runs first that sent every
+#: comparison question straight to the direct track and silently bypassed the
+#: Scaffolding Engine.
 _FACTUAL_RE = re.compile(
     r"(?i)(?:"
     r"\b(?:stand|stands) for\b"
     r"|\b(?:acronym|abbreviation)\b"
     r"|\b(?:define|definition of|definition for)\b"
-    r"|\bdifference between\b"
     r"|\bwhat (?:is|are|was|were)\b"
-    r"|\bwhat does\b.{0,40}\b(?:mean|stand for|do)\b"
-    r"|\bexplain what\b"
+    r"|\bwhat does\b.{0,40}\b(?:mean|stand for)\b"
     r"|\bwhat(?:'s|s) the (?:meaning|full form|definition)\b"
     r")"
+)
+#: Asks the model to *reason* rather than recall a definition -> conceptual track.
+#: Tested before the definitional pattern, so "What is inheritance and why does it
+#: help with code reuse?" scaffolds instead of dumping the answer on turn one.
+_REASONING_RE = re.compile(
+    r"(?i)\b(?:"
+    r"why (?:does|do|did|is|are|was|were|would|should|can|could|might)|"
+    r"how (?:does|do|did|is|are|was|were|can|could|would|should)|"
+    r"explain (?:how|why)|"
+    r"when (?:should|would|do|to use)|"
+    r"what (?:makes|causes|leads)|"
+    r"how come|"
+    # A comparison, a trade-off, a challenge or a purpose all require reasoning
+    # rather than recall, even when the sentence opens with "what is".
+    r"difference between|"
+    r"trade-?offs?|"
+    r"challenges? (?:of|with|in|when|that)|"
+    r"how (?:it|this|that) (?:works|is used)"
+    # NB: a bare "used for" is deliberately NOT here. "What are XML schemas used
+    # for?" is a definitional question and should take the direct track; treating
+    # it as reasoning regressed two factual rows to fix one conceptual row.
+    r")\b"
 )
 #: Syllabus-fact patterns (dates, scope, marks) -> direct track.
 _SYLLABUS_RE = re.compile(
@@ -199,6 +228,9 @@ class IntentAgent:
             return make("debugging", 0.75, "Matched error/code signals.")
         if _START_RE.search(text) or _PROBLEM_RE.search(text):
             return make("problem_solving", 0.7, "Matched a how-to-start/approach request.")
+        # A definition request that also asks *why*/*how* is a conceptual question.
+        if _REASONING_RE.search(text):
+            return make("conceptual", 0.7, "Matched an explanation/reasoning request.")
         if _SYLLABUS_RE.search(text) or _FACTUAL_RE.search(text):
             return make("factual", 0.75, "Matched a definition/acronym/syllabus pattern.")
         if _CONCEPT_RE.search(text):

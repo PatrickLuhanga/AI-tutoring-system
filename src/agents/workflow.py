@@ -33,8 +33,9 @@ from ..config import settings
 from ..db import session_scope
 from ..llm_router import LLMError, LLMResponse, LLMRouter, get_router
 from ..models import Module, TelemetryLog
-from ..retriever import RetrievalResult, Retriever, get_retriever
+from ..retriever import RetrievalPolicy, RetrievalResult, Retriever, get_retriever
 from ..prompts import ROUTE_DIRECT
+from ..unanswered import classify_reason, record_ungrounded
 from .guardrail import GuardrailAgent, GuardrailResult
 from .intent_agent import _CODE_SIGNAL_RE, Intent, IntentAgent
 from .scaffolding import ScaffoldingLayer
@@ -112,7 +113,7 @@ class TutoringWorkflow:
         direct = intent.route == ROUTE_DIRECT
 
         # Data Tier: degrade to empty context if the vector store is unreachable.
-        retrieval = self._retrieve(request, intent)
+        retrieval = self._retrieve(request, intent, stage, direct)
 
         # Inference Tier: may raise LLMError -> handled as a clean 502 upstream.
         if direct:
@@ -143,6 +144,17 @@ class TutoringWorkflow:
         )
         latency_ms = int((time.perf_counter() - started) * 1000)
 
+        # Human Adjustment Cycle (section 17): if RAG could not ground the
+        # question, queue it for a tutor instead of letting the model answer from
+        # its parametric memory. A weak guardrail flag also queues it.
+        self._queue_if_ungrounded(
+            request=request,
+            intent=intent,
+            retrieval=retrieval,
+            audit=audit,
+            message_id=message_id,
+        )
+
         log_id = self._log_telemetry(
             request=request,
             message_id=message_id,
@@ -164,6 +176,10 @@ class TutoringWorkflow:
             retrieval={
                 "chunks": [c.to_dict() for c in retrieval.chunks],
                 "patterns": [p.to_dict() for p in retrieval.patterns],
+                "grounding_categories": retrieval.grounding_categories,
+                "third_party_fallback": retrieval.third_party_fallback,
+                "below_threshold": retrieval.below_threshold,
+                "context_empty": retrieval.is_empty,
             },
             llm=draft.to_dict(),
             telemetry_log_id=log_id,
@@ -177,14 +193,33 @@ class TutoringWorkflow:
                 return module["module_name"]
         return module_id
 
-    def _retrieve(self, request: ChatRequest, intent: Intent) -> RetrievalResult:
-        """Retrieve module-scoped context, degrading gracefully on DB failure."""
+    def _retrieve(
+        self,
+        request: ChatRequest,
+        intent: Intent,
+        stage: str,
+        direct: bool,
+    ) -> RetrievalResult:
+        """Retrieve module-scoped context, degrading gracefully on DB failure.
+
+        Worked solutions are withheld until the session reaches the Explanation
+        stage (or is a factual turn, where answering directly is the intent), so
+        retrieval cannot collapse the Socratic scaffolding (section 7.4).
+        """
         include_patterns = intent.label in {"debugging", "problem_solving"} or bool(
             _CODE_SIGNAL_RE.search(request.message)
         )
+        policy = RetrievalPolicy(
+            allow_answers=bool(direct) or stage == "explanation",
+            include_third_party=settings.retrieval_include_third_party,
+            max_distance=(settings.retrieval_max_distance or None),
+        )
         try:
             return self.retriever.retrieve(
-                request.message, request.module_id, include_patterns=include_patterns
+                request.message,
+                request.module_id,
+                include_patterns=include_patterns,
+                policy=policy,
             )
         except Exception as exc:  # noqa: BLE001 - Data Tier must not break the turn
             logger.warning(
@@ -193,6 +228,53 @@ class TutoringWorkflow:
                 exc,
             )
             return RetrievalResult(query=request.message, module_id=request.module_id)
+
+    @staticmethod
+    def _queue_if_ungrounded(
+        *,
+        request: ChatRequest,
+        intent: Intent,
+        retrieval: RetrievalResult,
+        audit: GuardrailResult,
+        message_id: str,
+    ) -> None:
+        """Send a question to the tutor queue when it was not grounded in material.
+
+        Deliberately conservative: only genuinely ungrounded turns are queued, so
+        the queue stays a short list of real curriculum gaps rather than every
+        question a student ever asked.
+        """
+        try:
+            no_grounding = retrieval.is_empty
+            weak_guardrail = bool(audit.flagged)
+            if not (no_grounding or weak_guardrail):
+                return
+            if intent.label == "bypass":
+                # A bypass attempt is a pedagogical event, not a curriculum gap.
+                return
+            reason = (
+                "student_flagged"
+                if weak_guardrail and not no_grounding
+                else classify_reason(
+                    chunk_count=len(retrieval.chunks),
+                    below_threshold=retrieval.below_threshold,
+                    third_party_fallback=retrieval.third_party_fallback,
+                    grounded_categories=retrieval.grounding_categories,
+                )
+            )
+            best = min((c.distance for c in retrieval.chunks), default=None)
+            record_ungrounded(
+                question_text=request.message,
+                module_id=request.module_id,
+                reason=reason,
+                session_id=request.session_id,
+                message_id=message_id,
+                student_id=request.student_id,
+                intent=intent.label,
+                best_distance=best,
+            )
+        except Exception as exc:  # noqa: BLE001 - never break a reply
+            logger.warning("Could not evaluate question for the tutor queue: %s", exc)
 
     @staticmethod
     def _count_session_turns(session_id: str) -> int:
@@ -249,6 +331,8 @@ class TutoringWorkflow:
                     retrieved_code_pattern_ids=retrieval.pattern_ids,
                     embedding_model=settings.embedding_model_name,
                     response_latency_ms=latency_ms,
+                    retrieval_categories=retrieval.grounding_categories,
+                    third_party_fallback=retrieval.third_party_fallback,
                 )
                 session.add(log)
                 session.flush()

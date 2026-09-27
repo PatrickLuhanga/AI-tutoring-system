@@ -5,6 +5,19 @@ document, chunks it with LangChain's ``RecursiveCharacterTextSplitter``,
 generates local embeddings with ``all-MiniLM-L6-v2`` and upserts the result into
 ``curriculum_chunks``.
 
+Markdown sources are first split along their own structure (slide markers and
+top-level headings) by :func:`src.loaders.split_markdown_sections`, so a chunk
+tends to align with a whole slide or topic rather than an arbitrary character
+window. Only the resulting sections are handed to the character splitter.
+
+Two extra labels are stored on every chunk:
+
+* ``source_category`` - provenance (``slides`` / ``books`` / ``exercises`` / ...),
+  so retrieval can prefer the module's own teaching material.
+* ``is_answer`` - the chunk contains a worked answer or model solution. The
+  retriever withholds these until the Scaffolding Engine reaches the Explanation
+  stage, so retrieval cannot leak a finished solution (section 7.4).
+
 Every chunk is tagged with the ``module_id`` of its top-level folder so the RAG
 Orchestrator can apply a metadata filter before the similarity search.
 
@@ -47,9 +60,20 @@ class IngestionStats:
     sections_seen: int = 0
     errors: int = 0
     per_module: dict[str, int] = field(default_factory=dict)
+    per_category: dict[str, int] = field(default_factory=dict)
+    answer_chunks: int = 0
 
     def record_module(self, module_id: str, chunks: int) -> None:
         self.per_module[module_id] = self.per_module.get(module_id, 0) + chunks
+
+    def record_chunks(self, content_file: "ContentFile", chunks: int, answers: int) -> None:
+        self.per_module[content_file.module_id] = (
+            self.per_module.get(content_file.module_id, 0) + chunks
+        )
+        self.per_category[content_file.source_category] = (
+            self.per_category.get(content_file.source_category, 0) + chunks
+        )
+        self.answer_chunks += answers
 
 
 def build_splitter():
@@ -90,6 +114,8 @@ def build_chunk_rows(content_file: ContentFile, sections: list[Section], splitte
                     "source_type": content_file.source_type,
                     "topic": content_file.topic,
                     "section_title": section.title[:512],
+                    "source_category": content_file.source_category,
+                    "is_answer": bool(section.is_answer),
                     "chunk_index": chunk_index,
                     "chunk_text": text,
                     "token_count": len(text.split()),
@@ -101,6 +127,8 @@ def build_chunk_rows(content_file: ContentFile, sections: list[Section], splitte
                         "topic": content_file.topic,
                         "section_title": section.title,
                         "source_type": content_file.source_type,
+                        "source_category": content_file.source_category,
+                        "is_answer": bool(section.is_answer),
                     },
                     "embedding_model": settings.embedding_model_name,
                 }
@@ -116,17 +144,24 @@ def _embed_rows(rows: list[dict], embedder) -> None:
         row["embedding"] = [float(value) for value in vector]
 
 
-def ingest_file(content_file: ContentFile, splitter, embedder, dry_run: bool) -> tuple[int, bool]:
-    """Ingest a single file. Returns ``(chunks_written, was_empty)``."""
+def count_answer_chunks(rows: list[dict]) -> int:
+    return sum(1 for row in rows if row.get("is_answer"))
+
+
+def ingest_file(
+    content_file: ContentFile, splitter, embedder, dry_run: bool
+) -> tuple[int, bool, int]:
+    """Ingest a single file. Returns ``(chunks_written, was_empty, answer_chunks)``."""
     sections = extract_sections(content_file.path)
     if not sections:
-        return 0, True
+        return 0, True, 0
 
     rows = build_chunk_rows(content_file, sections, splitter)
     if not rows:
-        return 0, True
+        return 0, True, 0
+    answers = count_answer_chunks(rows)
     if dry_run:
-        return len(rows), False
+        return len(rows), False, answers
 
     _embed_rows(rows, embedder)
 
@@ -136,7 +171,7 @@ def ingest_file(content_file: ContentFile, splitter, embedder, dry_run: bool) ->
             delete(CurriculumChunk).where(CurriculumChunk.source_file == content_file.rel_path)
         )
         session.execute(insert(CurriculumChunk), rows)
-    return len(rows), False
+    return len(rows), False, answers
 
 
 def reset_table() -> None:
@@ -184,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     stats = IngestionStats(files_seen=len(files))
     for content_file in tqdm(files, desc="Ingesting", unit="file"):
         try:
-            written, empty = ingest_file(content_file, splitter, embedder, args.dry_run)
+            written, empty, answers = ingest_file(content_file, splitter, embedder, args.dry_run)
         except Exception as exc:  # noqa: BLE001 - continue on individual failures
             stats.errors += 1
             logger.error("Failed %s: %s", content_file.rel_path, exc)
@@ -197,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
 
         stats.files_ingested += 1
         stats.chunks_written += written
-        stats.record_module(content_file.module_id, written)
+        stats.record_chunks(content_file, written, answers)
 
     logger.info("-" * 60)
     logger.info("Files discovered : %d", stats.files_seen)
@@ -207,6 +242,9 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("Chunks %-8s : %d", "counted" if args.dry_run else "written", stats.chunks_written)
     for module_id, count in sorted(stats.per_module.items()):
         logger.info("  %-10s %6d chunks", module_id, count)
+    for category, count in sorted(stats.per_category.items(), key=lambda kv: -kv[1]):
+        logger.info("    %-12s %6d chunks", category, count)
+    logger.info("  answer-flagged : %d chunks (withheld until Explanation stage)", stats.answer_chunks)
 
     if not args.dry_run:
         with session_scope() as session:
