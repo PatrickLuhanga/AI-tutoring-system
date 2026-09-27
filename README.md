@@ -25,7 +25,7 @@ INFERENCE TIER     Local Ollama (Qwen3)  or  a cloud API  -  via Dynamic LLM Rou
 | Vector store: curriculum chunks (§8) | `curriculum_chunks` with `module_id` metadata filter |
 | Vector store: code-repair patterns (§14) | `code_repair_patterns` (50 synthetic Java patterns) |
 | **Heading-aware chunking** (§3.2 data pipeline) | `MarkdownHeaderTextSplitter` on Markdown-preserving extraction + contextual breadcrumbs (`module › topic › heading path`) |
-| Local, lightweight embedding model (§10.3) | `all-MiniLM-L6-v2` via SentenceTransformers (384-dim) |
+| Local, lightweight embedding model (§10.3) | `nomic-embed-text` (768-dim) via local Ollama with `search_document:` / `search_query:` task prefixes |
 | API Gateway: authenticate, route, enforce module scope (§3, §5.1) | `app.py` + `src/app.py` + `src/auth.py` |
 | Intent Agent: classify conceptual / debugging / problem-solving / bypass / factual (§6) | `src/agents/intent_agent.py` |
 | Scaffolding Engine: Socratic progression (§7) | `src/agents/scaffolding.py` + `src/prompts.py` |
@@ -39,12 +39,14 @@ INFERENCE TIER     Local Ollama (Qwen3)  or  a cloud API  -  via Dynamic LLM Rou
 | Student Chat UI (module dropdown, session_id, audit panel, thumbs feedback) | `frontend/src/views/StudentChat.tsx` |
 | Admin/Tutor Dashboard (LLM router control + telemetry charts) | `frontend/src/views/AdminDashboard.tsx` |
 
-The architecture document names `nomic-embed-text` (768-dim) as the working
-embedding choice. This repository defaults to `all-MiniLM-L6-v2` (384-dim)
-because it is smaller, fully local and free, and still satisfies the
-"lightweight embedding model" requirement. The embedding model and its
-dimension are configuration, not code — see
-[§6 Swapping the embedding model](#6-swapping-the-embedding-model).
+The working embedding model is the architecture document's `nomic-embed-text`
+(768-dim), served by the same local Ollama runtime used for inference. It is an
+instruct-style model: documents are embedded with a `search_document:` prefix
+and queries with `search_query:`. The embedding model, its dimension and its
+backend are configuration, not code — see
+[§5 Swapping the embedding model](#5-swapping-the-embedding-model). A local
+`sentence-transformers` backend (e.g. `all-MiniLM-L6-v2`, 384-dim) and an
+offline `hash` stub remain available for machines without Ollama.
 
 ---
 
@@ -157,7 +159,8 @@ python -m src.ingest_code_patterns  # inserts the 50 Java code-repair patterns
 python -m src.verify_data           # row counts + 2 module-filtered similarity searches
 ```
 
-The first `ingest_curriculum` run downloads `all-MiniLM-L6-v2` (~90 MB). Full
+The first `ingest_curriculum` run needs `nomic-embed-text` pulled in Ollama
+(see §2.6) — every chunk is embedded through Ollama's `/api/embed`. Full
 ingestion takes a while — for a quick test:
 `python -m src.ingest_curriculum --module IPRT --max-files 20`.
 
@@ -270,14 +273,24 @@ python -m src.ingest_code_patterns --reset     # wipe first
 
 ---
 
-## 5. Swapping the embedding model
+## 5. Swapping the embedding model / backend
 
-The dimension of the `vector` columns comes from `EMBEDDING_DIM`. To switch to
-the architecture document's `nomic-embed-text` (768-dim) or any other model:
+The dimension of the `vector` columns comes from `EMBEDDING_DIM`, and the
+backend from `EMBEDDING_BACKEND`:
 
-1. Set `EMBEDDING_MODEL_NAME` and `EMBEDDING_DIM` in `.env`.
-2. Recreate the schema: `python -m src.setup_database --drop`.
-3. Re-run both ingestion scripts.
+| `EMBEDDING_BACKEND` | Model | Notes |
+| --- | --- | --- |
+| `ollama` *(default)* | `nomic-embed-text` (768-dim) | Instruct embeddings; `EMBEDDING_DOC_PREFIX` / `EMBEDDING_QUERY_PREFIX` control the task prefixes (`search_document:` / `search_query:`) |
+| `sentence-transformers` | e.g. `all-MiniLM-L6-v2` (384-dim) | Runs in-process; no Ollama needed |
+| `hash` | — | Deterministic offline stub for smoke tests only; no semantic meaning |
+
+To switch backend/model:
+
+1. Set `EMBEDDING_MODEL_NAME`, `EMBEDDING_DIM` and `EMBEDDING_BACKEND` in `.env`.
+2. For Ollama: `ollama pull <model>` and check the tag matches `EMBEDDING_MODEL_NAME`.
+3. Recreate the schema: `python -m src.setup_database --drop` (or drop just the
+   two vector tables — see the Phase 3 migration walkthrough below).
+4. Re-run both ingestion scripts.
 
 The setup and ingestion scripts fail loudly if `EMBEDDING_DIM` disagrees with
 the model's real output dimension.
@@ -286,6 +299,39 @@ the model's real output dimension.
 > with a deterministic, dependency-free stub. It produces correctly-shaped
 > vectors so the pipeline can be exercised without the ML stack, but the vectors
 > carry **no semantic meaning** — never use it for real retrieval.
+
+### 5.1 Migration walkthrough (384-dim → nomic-embed-text 768-dim)
+
+Changing the embedding dimension invalidates every stored vector, so the two
+vector tables must be dropped and re-ingested. Telemetry, feedback and
+`llm_configs` are untouched.
+
+```powershell
+# 1. Get the model
+ollama pull nomic-embed-text
+ollama list                                  # expect nomic-embed-text
+
+# 2. Point .env at it (or copy the values from .env.example)
+#    EMBEDDING_MODEL_NAME=nomic-embed-text
+#    EMBEDDING_DIM=768
+#    EMBEDDING_BACKEND=ollama
+
+# 3. Drop the old 384-dim vector tables only (destructive for vector data)
+docker exec -i ai_tutoring_pg psql -U tutor_admin -d ai_tutoring -c "DROP TABLE IF EXISTS curriculum_chunks CASCADE; DROP TABLE IF EXISTS code_repair_patterns CASCADE;"
+
+# 4. Recreate the tables (non-destructive for everything else)
+python -m src.setup_database
+
+# 5. Re-ingest both vector stores
+python -m src.ingest_curriculum
+python -m src.ingest_code_patterns
+
+# 6. Verify
+python -m src.verify_data --module IPRT301 --query "NullPointerException on a null String"
+```
+
+If you prefer a full nuke of **all** data-tier tables instead of the targeted
+drop in step 3, use `python -m src.setup_database --drop`.
 
 ---
 
@@ -325,8 +371,8 @@ Office formats and binaries are skipped and reported. Edit the registry in
 
 | Table | Key columns |
 | --- | --- |
-| `curriculum_chunks` | `module_id`, `source_file`, `topic`, `section_title`, `chunk_index`, `chunk_text`, `embedding vector(384)`, `doc_metadata` (includes `heading_path` + `breadcrumb`) |
-| `code_repair_patterns` | `error_title` (unique), `exception_thrown`, `broken_code`, `conceptual_tutor_hint`, `embedding vector(384)` |
+| `curriculum_chunks` | `module_id`, `source_file`, `topic`, `section_title`, `breadcrumb`, `heading_path` (JSONB), `chunk_strategy`, `chunk_index`, `chunk_text`, `embedding vector(768)`, `doc_metadata` |
+| `code_repair_patterns` | `error_title` (unique), `exception_thrown`, `broken_code`, `conceptual_tutor_hint`, `embedding vector(768)` |
 
 Example module-filtered similarity query (mirrors §8.4 of the architecture
 document):

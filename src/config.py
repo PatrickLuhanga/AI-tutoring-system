@@ -173,6 +173,8 @@ class Settings:
     embedding_batch_size: int
     embedding_normalize: bool
     embedding_backend: str
+    embedding_doc_prefix: str
+    embedding_query_prefix: str
 
     # Curriculum ingestion
     content_dir: Path
@@ -258,12 +260,14 @@ def _build_settings() -> Settings:
     return Settings(
         database_url=_database_url(),
         db_schema=_str("DB_SCHEMA", "public"),
-        embedding_model_name=_str("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2"),
-        embedding_dim=_int("EMBEDDING_DIM", 384),
+        embedding_model_name=_str("EMBEDDING_MODEL_NAME", "nomic-embed-text"),
+        embedding_dim=_int("EMBEDDING_DIM", 768),
         embedding_device=_str("EMBEDDING_DEVICE", "cpu"),
         embedding_batch_size=_int("EMBEDDING_BATCH_SIZE", 64),
         embedding_normalize=_bool("EMBEDDING_NORMALIZE", True),
-        embedding_backend=_str("EMBEDDING_BACKEND", "sentence-transformers").lower(),
+        embedding_backend=_str("EMBEDDING_BACKEND", "ollama").lower(),
+        embedding_doc_prefix=_str("EMBEDDING_DOC_PREFIX", "search_document:"),
+        embedding_query_prefix=_str("EMBEDDING_QUERY_PREFIX", "search_query:"),
         content_dir=content_dir,
         chunk_size=_int("CHUNK_SIZE", 1000),
         chunk_overlap=_int("CHUNK_OVERLAP", 150),

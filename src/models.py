@@ -296,6 +296,12 @@ class CurriculumChunk(Base):
     topic: Mapped[Optional[str]] = mapped_column(String(255))
     section_title: Mapped[Optional[str]] = mapped_column(String(512))
 
+    # Phase 2/3: the ``module › topic › heading path`` breadcrumb and its
+    # segments, promoted out of ``doc_metadata`` so they are directly queryable.
+    breadcrumb: Mapped[Optional[str]] = mapped_column(String(512))
+    heading_path: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    chunk_strategy: Mapped[Optional[str]] = mapped_column(String(32))
+
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[Optional[int]] = mapped_column(Integer)
