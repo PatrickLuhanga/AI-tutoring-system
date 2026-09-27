@@ -22,6 +22,7 @@ route converts into the clean JSON payload the UI expects.
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -53,6 +54,32 @@ from .scaffolding import ScaffoldingLayer
 from .tutor_agent import TutorAgent
 
 logger = logging.getLogger(__name__)
+
+#: Headings that identify a document's shape rather than its content. Offering
+#: these to the expander wastes its attention and its prompt budget.
+_UNINFORMATIVE_TITLE_RE = re.compile(
+    r"^(?:summary|overview|introduction|contents?|agenda|outline|topic|notes?"
+    r"|further reading|references?|bibliography|objectives?|learning outcomes?"
+    r"|questions?|exercises?|tutorials?|activity|discussion|problem|solution"
+    r"|conclusion|examples?|content|thank you|index|credits|acknowledgements?"
+    r"|preface|pages?|next|previous|home|back|yes|no|none)\b\.?$",
+    re.IGNORECASE,
+)
+
+#: Structural prefixes that carry no topical information. "slide 13: aims and
+#: objectives" and "aims and objectives" are the same heading, but only the second
+#: reads as a phrase the expander can turn into a query.
+_TITLE_PREFIX_RE = re.compile(
+    r"^(?:slide|page|topic|chapter|part|exercise|question|example|figure|table|step)"
+    r"\s*\d*\s*[:.\-]\s*",
+    re.IGNORECASE,
+)
+
+
+def _normalise_title(title: str) -> str:
+    """Strip structural prefixes so a heading reads as a phrase."""
+    cleaned = _TITLE_PREFIX_RE.sub("", (title or "").strip())
+    return cleaned.rstrip(" .:;").strip() or (title or "").strip()
 
 
 @dataclass(slots=True)
@@ -304,23 +331,49 @@ class TutoringWorkflow:
             return first
 
     def _module_section_titles(self, module_id: str) -> list[str]:
-        """Section headings for a module, used to ground the rewrite."""
+        """Section headings for a module, biggest sections first.
+
+        Ordered by how many chunks a heading covers rather than by a hand-tuned
+        keyword list, because a heading that spans a lot of the material is a
+        core topic by definition, while a one-chunk heading is usually incidental
+        ("index", "credits", "Slide 7:"). That signal is free: it is a GROUP BY on
+        data already ingested, and it held up where a regex heuristic did not -
+        scoring headings by word count promoted "index" and "next" over
+        "Inheritance", and penalising long headings hid "Abstract class vs
+        Interface".
+
+        Capped, because the expander prompt is prefilled with these on a CPU-only
+        host: 60 titles cost ~374 words of prefill and a measured 72s per call,
+        against 42-74s for a whole tutor turn.
+        """
         try:
             with session_scope() as session:
-                return list(
+                ranked = list(
                     session.execute(
-                        select(CurriculumChunk.section_title)
+                        select(CurriculumChunk.section_title, func.count())
                         .where(
                             CurriculumChunk.module_id == module_id,
                             CurriculumChunk.section_title.isnot(None),
                         )
-                        .distinct()
-                        .limit(60)
-                    ).scalars()
+                        .group_by(CurriculumChunk.section_title)
+                        .order_by(func.count().desc())
+                    ).all()
                 )
         except Exception as exc:  # noqa: BLE001
             logger.debug("Could not list section titles for %s: %s", module_id, exc)
             return []
+
+        seen: dict[str, str] = {}
+        for title, _count in ranked:
+            cleaned = _normalise_title(title)
+            if not cleaned or _UNINFORMATIVE_TITLE_RE.match(cleaned):
+                continue
+            key = cleaned.casefold()
+            if key not in seen:
+                seen[key] = cleaned
+            if len(seen) >= settings.retrieval_expand_titles:
+                break
+        return list(seen.values())
 
     def _fuse(
         self,

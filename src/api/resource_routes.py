@@ -5,10 +5,12 @@ slide or section a claim came from instead of hunting through a PDF.
 
 Routes
 ------
-``GET /api/resources``                     every module with its documents
-``GET /api/resources/<module_id>``         one module's document list
-``GET /api/resources/<module_id>/doc/<path>``  one document as JSON (sections + html)
+``GET /resources``                         styled library root, every module
+``GET /resources/<module_id>``             one module's documents, grouped
 ``GET /resources/<module_id>/<path>``      one document as a styled HTML page
+``GET /api/resources``                     same index as JSON
+``GET /api/resources/<module_id>``         one module's document list as JSON
+``GET /api/resources/<module_id>/doc/<path>``  one document as JSON (sections + html)
 
 Documents are read from ``ACADEMIC_CONTENT_DIR`` at request time rather than from
 the vector store, so the page shows the original authoring rather than the
@@ -27,6 +29,7 @@ from ..config import settings
 from ..corpus_render import (
     RENDERABLE_SUFFIXES,
     content_root,
+    render_library_root,
     render_markdown_document,
     render_module_index,
     render_resource_page,
@@ -166,6 +169,30 @@ def get_document_json(module_id: str, rel_path: str):
         ),
         200,
     )
+
+
+@resource_bp.get("/resources")
+@resource_bp.get("/resources/")
+def get_library_root():
+    """Styled entry point: every module, linking to its document list."""
+    modules = []
+    for record in settings.modules.values():
+        mid = record["module_id"]
+        docs = _list_documents(mid)
+        by_category: dict[str, int] = {}
+        for doc in docs:
+            by_category[doc["source_category"]] = by_category.get(doc["source_category"], 0) + 1
+        modules.append(
+            {
+                "module_id": mid,
+                "module_name": record["module_name"],
+                "document_count": len(docs),
+                "by_category": by_category,
+                "url": f"/resources/{mid}",
+            }
+        )
+    page = render_library_root(modules)
+    return page, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
 @resource_bp.get("/resources/<module_id>")

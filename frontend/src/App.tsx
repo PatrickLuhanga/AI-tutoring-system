@@ -1,4 +1,4 @@
-import { GraduationCap, LayoutDashboard, Loader2, ShieldCheck } from 'lucide-react'
+import { BookOpen, GraduationCap, LayoutDashboard, Loader2, ShieldCheck } from 'lucide-react'
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 
 // Split the two tiers so the student bundle never downloads recharts, and the
@@ -62,6 +62,19 @@ export default function App() {
                 {item.label}
               </button>
             ))}
+            {/* The corpus library is served by Flask, not the SPA, so this is a
+                real link rather than a route: it opens the module index that every
+                Sources link points into. Opening in a new tab keeps the chat
+                session, so a student can check a note and come straight back. */}
+            <a
+              href="/resources"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-white hover:text-slate-700"
+            >
+              <BookOpen className="h-4 w-4" />
+              Course material
+            </a>
           </nav>
         </div>
       </header>

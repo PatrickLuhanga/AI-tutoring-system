@@ -252,6 +252,11 @@ class Settings:
     retrieval_expand_on_weak: bool
     #: Cosine distance above which a first-pass result counts as weak.
     retrieval_weak_distance: float
+    #: How many section titles to show the expander. The rewrite prompt is
+    #: prefilled with them and this host is CPU-only: 60 titles measured 374 words
+    #: of prefill and 72s per call, versus 42-74s for a whole tutor turn. Titles
+    #: are ranked by how much they reveal about the module before the cap applies.
+    retrieval_expand_titles: int
 
     # Guardrail
     guardrail_enabled: bool
@@ -368,6 +373,7 @@ def _build_settings() -> Settings:
         hnsw_ef_search=_int("HNSW_EF_SEARCH", 80),
         retrieval_expand_on_weak=_bool("RETRIEVAL_EXPAND_ON_WEAK", True),
         retrieval_weak_distance=_float("RETRIEVAL_WEAK_DISTANCE", 0.55),
+        retrieval_expand_titles=_int("RETRIEVAL_EXPAND_TITLES", 20),
         guardrail_enabled=_bool("GUARDRAIL_ENABLED", True),
         guardrail_max_code_lines=_int("GUARDRAIL_MAX_CODE_LINES", 8),
         guardrail_max_words=_int("GUARDRAIL_MAX_WORDS", 400),

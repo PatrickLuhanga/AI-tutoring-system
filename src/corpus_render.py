@@ -261,10 +261,15 @@ def render_markdown_document(
             rendered = md.render(f"{'#' * min(level + 1, 6)} {title}")
             # markdown-it assigns its own id only with the attr plugin, so inject
             # ours on the first heading tag of the rendered fragment.
+            # The second half of this replacement must be a raw f-string: in a
+            # plain f-string "\1" is the octal escape for chr(1), so the heading
+            # used to render as "#<SOH>2. Inheritance" - a control character
+            # wedged between the permalink and the text, which also broke
+            # textContent for anything matching on heading text.
             rendered = re.sub(
                 r"(<h[1-6])(>)",
                 rf'\1 id="{anchor}"><a class="anchor-link" href="#{anchor}" '
-                f'title="Link to this section">#</a>\1',
+                rf'title="Link to this section">#</a>',
                 rendered,
                 count=1,
             )
@@ -393,6 +398,70 @@ def render_resource_page(
 </html>"""
 
 
+def render_library_root(modules: list[dict]) -> str:
+    """Styled entry point for the whole corpus: every module and its document count."""
+    from html import escape
+
+    cards = []
+    for mod in modules:
+        count = mod.get("document_count", 0)
+        breakdown = []
+        for label, n in (mod.get("by_category") or {}).items():
+            if n:
+                breakdown.append(f"{n} {label}")
+        cats = escape(" · ".join(breakdown)) if breakdown else escape("no documents")
+        cards.append(
+            f'<li class="mod">'
+            f'<a href="{escape(mod["url"])}">'
+            f'<span class="code">{escape(mod["module_id"])}</span>'
+            f'<span class="name">{escape(mod["module_name"])}</span>'
+            f'<span class="meta">{count} document(s)</span>'
+            f'<span class="cats">{cats}</span>'
+            f"</a></li>"
+        )
+
+    total_docs = sum(m.get("document_count", 0) for m in modules)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Course material</title>
+<style>{_CSS}
+main {{ max-width: 900px; }}
+ul.modules {{ list-style: none; margin: 0; padding: 0; display: grid; gap: 10px;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }}
+li.mod a {{ display: flex; flex-direction: column; gap: 3px; padding: 14px 16px;
+            text-decoration: none; color: inherit; background: var(--card);
+            border: 1px solid var(--line); border-radius: 10px; height: 100%; }}
+li.mod a:hover {{ border-color: var(--accent); background: var(--accent-soft); }}
+li.mod .code {{ font-family: var(--mono); font-size: 11px; letter-spacing: .06em;
+                color: var(--accent); text-transform: uppercase; }}
+li.mod .name {{ font-size: 16px; font-weight: 600; }}
+li.mod .meta {{ font-size: 12px; color: var(--muted); }}
+li.mod .cats {{ font-size: 11px; color: var(--muted); opacity: .8; }}
+</style>
+</head>
+<body>
+<header class="site">
+  <span class="brand">AI Tutor</span>
+  <span class="crumb">Course material</span>
+  <span class="spacer"></span>
+  {module_nav("")}
+</header>
+<main>
+  <h1 class="doc">Course material</h1>
+  <p class="meta">{len(modules)} module(s) &middot; {total_docs} document(s).
+     Every source a tutor answer can cite is here.</p>
+  <ul class="modules">
+    {"".join(cards) if cards else "<p>No modules are configured.</p>"}
+  </ul>
+  <footer class="doc"><a href="/">Back to the tutor</a></footer>
+</main>
+</body>
+</html>"""
+
+
 def render_module_index(
     module_id: str,
     module_name: str,
@@ -513,10 +582,14 @@ def citation_url(module_id: str, source_file: str, section_title: Optional[str])
     fragment are emitted: the fragment makes the browser scroll natively even with
     scripting unavailable, ``?at=`` drives the highlight.
 
-    Known imprecision: two headings with identical text in one document get
-    ``-2`` / ``-3`` suffixes on the page, and a citation built from the section
-    title alone always resolves to the first. Rare enough in this corpus to accept
-    rather than carry a per-chunk anchor through ingestion.
+    Known imprecision, measured: 15 of 58 documents repeat a heading text, and 40
+    of the 1,055 distinct section titles a chunk can be tagged with (3.8%) resolve
+    to a non-unique id, so such a citation lands on the first of the repeated
+    headings rather than its own. The repeats concentrate in the two ingested
+    textbooks ("Problem" / "Discussion" / "Solution" per recipe, and chapter
+    front-matter), not in the lecture material. Fixing it properly needs the
+    anchor stored per chunk at ingest time, because the retriever cannot otherwise
+    tell which occurrence a chunk came from.
     """
     rel = document_rel_path(source_file, module_id)
     anchor = slugify(section_title) if section_title else ""
