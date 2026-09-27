@@ -298,7 +298,7 @@ def _build_settings() -> Settings:
         ollama_circuit_failure_threshold=_int("OLLAMA_CIRCUIT_FAILURE_THRESHOLD", 3),
         ollama_circuit_reset_timeout=_float("OLLAMA_CIRCUIT_RESET_TIMEOUT", 30.0),
         ollama_health_timeout=_int("OLLAMA_HEALTH_TIMEOUT", 5),
-        retrieval_top_k=_int("RETRIEVAL_TOP_K", 3),
+        retrieval_top_k=_int("RETRIEVAL_TOP_K", 6),
         retrieval_code_top_k=_int("RETRIEVAL_CODE_TOP_K", 3),
         guardrail_enabled=_bool("GUARDRAIL_ENABLED", True),
         guardrail_max_code_lines=_int("GUARDRAIL_MAX_CODE_LINES", 8),
