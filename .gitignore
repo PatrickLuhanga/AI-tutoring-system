@@ -23,7 +23,11 @@ models/
 .cache/
 
 academic content/
-corpora/
+# Anchored on purpose. Unanchored, `corpora/` also matched `src/corpora/` at any
+# depth, which silently swallowed src/corpora/java_error_corpus.py - source, not
+# a cache - so `python -m src.ingest_code_patterns` failed with ModuleNotFoundError
+# on every clone. See LOCAL_SETUP_NOTES.md section 3.
+/corpora/
 venv/
 .venv/
 
