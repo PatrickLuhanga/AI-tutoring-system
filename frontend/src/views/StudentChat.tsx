@@ -5,7 +5,7 @@ import { INITIAL_MESSAGES, MODULES } from '../api/mockData'
 import AuditPanel from '../components/AuditPanel'
 import FeedbackControls from '../components/FeedbackControls'
 import MarkdownMessage from '../components/MarkdownMessage'
-import type { ChatMessage, FeedbackState } from '../types'
+import type { ChatMessage, FeedbackState, Module } from '../types'
 
 const newSessionId = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -14,6 +14,10 @@ const newSessionId = () =>
 
 export default function StudentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES)
+  // The dropdown renders whatever the module registry actually contains, so a
+  // module added in config.py appears here without a frontend change. MODULES is
+  // only the offline fallback.
+  const [modules, setModules] = useState<Module[]>(MODULES)
   const [moduleId, setModuleId] = useState(() => MODULES[1].module_id)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -21,9 +25,26 @@ export default function StudentChat() {
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeModule = useMemo(
-    () => MODULES.find((m) => m.module_id === moduleId) ?? MODULES[0],
-    [moduleId],
+    () => modules.find((m) => m.module_id === moduleId) ?? modules[0],
+    [modules, moduleId],
   )
+
+  useEffect(() => {
+    let cancelled = false
+    void api
+      .getModules()
+      .then((live) => {
+        if (cancelled || !live.length) return
+        setModules(live)
+        setModuleId((current) =>
+          live.some((m) => m.module_id === current) ? current : live[0].module_id,
+        )
+      })
+      .catch((err) => console.error('could not load modules', err))
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -110,7 +131,7 @@ export default function StudentChat() {
               onChange={(e) => setModuleId(e.target.value)}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
             >
-              {MODULES.map((module) => (
+              {modules.map((module) => (
                 <option key={module.module_id} value={module.module_id}>
                   {module.module_id} · {module.module_name}
                 </option>

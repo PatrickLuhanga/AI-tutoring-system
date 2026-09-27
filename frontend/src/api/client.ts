@@ -11,6 +11,7 @@ import type {
   FeedbackPayload,
   LLMConfig,
   LLMConfigUpdatePayload,
+  Module,
   OllamaModelsResponse,
   TelemetryAnalytics,
 } from '../types'
@@ -19,6 +20,7 @@ import {
   MOCK_ANALYTICS,
   MOCK_LLM_CONFIG,
   MOCK_OLLAMA_MODELS,
+  MODULES as MOCK_MODULES,
   mockChatResponse,
 } from './mockData'
 
@@ -49,6 +51,15 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  /** `GET /api/modules` - the module registry the dropdown should render. */
+  async getModules(): Promise<Module[]> {
+    if (USE_MOCK) {
+      return delay(MOCK_MODULES)
+    }
+    const body = await http<{ modules: Module[] }>('/api/modules')
+    return body.modules
+  },
+
   /** `POST /api/chat` */
   async chat(payload: ChatRequestPayload): Promise<ChatResponse> {
     if (USE_MOCK) {

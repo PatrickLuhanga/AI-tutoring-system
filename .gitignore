@@ -26,3 +26,7 @@ academic content/
 corpora/
 venv/
 .venv/
+
+# Evaluation run artefacts: logs and per-turn JSON from eval/run_*_eval.py.
+# The harness and the labelled test set are tracked; a run's output is not.
+eval/results/

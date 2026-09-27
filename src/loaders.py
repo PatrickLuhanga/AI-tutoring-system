@@ -338,6 +338,20 @@ _ANSWER_TITLE_RE = re.compile(
 )
 
 
+def _clean_title(text: str) -> str:
+    """Tidy a heading for use as a section title.
+
+    Slide decks are authored with the whole heading in bold (``## **1. The research
+    process**``). The asterisks are Markdown, not content, and they end up in the
+    prompt as ``[Curriculum 1] **1. The research process**``, so strip the
+    emphasis, trailing hashes and surrounding whitespace.
+    """
+    cleaned = text.strip()
+    cleaned = re.sub(r"[*_`~]+", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned or text.strip()
+
+
 def split_markdown_sections(text: str, fallback_title: str) -> List[Section]:
     """Split Markdown into sections that respect its own structural boundaries.
 
@@ -381,7 +395,7 @@ def _iter_boundaries(text: str, *, slide_mode: bool):
             continue
         heading = _ATX_HEADING_RE.match(line)
         if heading:
-            title = heading.group(2).strip()
+            title = _clean_title(heading.group(2))
             is_answer = bool(_ANSWER_TITLE_RE.match(title))
             if slide_mode:
                 # Inside a slide a heading is furniture, not a boundary - except an

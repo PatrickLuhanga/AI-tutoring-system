@@ -454,17 +454,33 @@ class LLMRouter:
             body["format"] = "json"
 
         data = client.post_json("/api/chat", body)
+        text = strip_reasoning((data.get("message") or {}).get("content"))
 
-        message = data.get("message") or {}
-        text = message.get("content")
-        text = strip_reasoning(text)
         if not text:
-            # A reasoning model can burn the whole num_predict budget thinking and
-            # return nothing. Surface that instead of an empty hint.
+            # A reasoning model can spend the entire num_predict budget on its
+            # thinking channel and return nothing. That is not a transport failure
+            # and retrying with the same budget just fails again, so escalate the
+            # budget once and try again.
+            retry_budget = max(max_tokens, int(settings.llm_max_tokens)) * 2
+            logger.warning(
+                "Ollama returned an empty response for %s (model=%s, num_predict=%d); "
+                "retrying with num_predict=%d to leave room after the thinking channel.",
+                url, config.local_model, max_tokens, retry_budget,
+            )
+            retry_body = dict(body)
+            retry_body["options"] = {**body["options"], "num_predict": retry_budget}
+            data = client.post_json("/api/chat", retry_body)
+            text = strip_reasoning((data.get("message") or {}).get("content"))
+
+        if not text:
+            # Still nothing: the model is thinking longer than any sane budget.
+            # Say so plainly rather than surfacing an empty hint to a student.
             raise LLMError(
                 f"Ollama returned an empty response from {url} "
-                f"(model={config.local_model}). If this is a reasoning model, raise "
-                f"LLM_MAX_TOKENS so the thinking channel leaves room for the answer."
+                f"(model={config.local_model}). {config.local_model} is a reasoning "
+                f"model and used the whole token budget thinking. Either raise "
+                f"LLM_MAX_TOKENS further, or switch to a non-reasoning model via "
+                f"POST /api/admin/llm-config."
             )
         return text, "ollama"
 

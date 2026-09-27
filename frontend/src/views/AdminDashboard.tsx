@@ -93,21 +93,35 @@ export default function AdminDashboard() {
     let cancelled = false
     async function load() {
       setLoading(true)
+      // Settle each call independently. A single rejected request must not leave
+      // the whole panel stuck on the spinner: the model list and the analytics
+      // panel fail independently in practice.
       const [cfg, ollama, telemetry] = await Promise.all([
-        api.getLLMConfig(),
-        api.listOllamaModels(),
-        api.getAnalytics(),
+        api.getLLMConfig().catch((e) => {
+          console.error('llm-config failed', e)
+          return null
+        }),
+        api.listOllamaModels().catch((e) => {
+          console.error('ollama-models failed', e)
+          return null
+        }),
+        api.getAnalytics().catch((e) => {
+          console.error('analytics failed', e)
+          return null
+        }),
       ])
       if (cancelled) return
-      setConfig(cfg)
-      setModels(ollama.models)
+      if (cfg) {
+        setConfig(cfg)
+        setProvider(cfg.provider)
+        setLocalModel(cfg.local.model)
+        setOllamaBaseUrl(cfg.local.base_url)
+        setCloudProvider(cfg.cloud.provider)
+        setCloudBaseUrl(cfg.cloud.base_url)
+        setCloudModel(cfg.cloud.model)
+      }
+      if (ollama) setModels(ollama.models)
       setAnalytics(telemetry)
-      setProvider(cfg.provider)
-      setLocalModel(cfg.local.model)
-      setOllamaBaseUrl(cfg.local.base_url)
-      setCloudProvider(cfg.cloud.provider)
-      setCloudBaseUrl(cfg.cloud.base_url)
-      setCloudModel(cfg.cloud.model)
       setLoading(false)
     }
     void load()
