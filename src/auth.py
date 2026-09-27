@@ -155,20 +155,55 @@ def _load_identity(email: str, requested_role: Optional[str], source: str) -> Id
 # ---------------------------------------------------------------------------
 # Authorization
 # ---------------------------------------------------------------------------
+#: Values that have shipped in a template or a local .env and are therefore
+#: guessable by anyone who has read the repository. Configuring one of these is
+#: treated as "no admin key configured" rather than as a working credential.
+KNOWN_WEAK_ADMIN_KEYS = frozenset(
+    {
+        "",
+        "change-me-admin-key",
+        "change-me",
+        "local-dev-admin-key",
+        "admin",
+        "secret",
+        "password",
+        "test",
+    }
+)
+
+
 def require_admin(request: Request) -> Identity:
     """Authorize an admin-only request via the shared ``X-Admin-Key``.
 
     This is the gateway's admin gate until DUT4life roles are wired; it is
     intentionally separate from the student identity flow.
+
+    Fails closed. An unset key gives 503, and a key still set to one of the
+    placeholder values documented in ``.env.example`` is also rejected. A warning
+    used to be logged and the request served anyway, which meant a deployment that
+    copied the example key was quietly open. Override for a local throwaway with
+    ``ADMIN_ALLOW_WEAK_KEY=true``.
     """
     provided = request.headers.get("X-Admin-Key") or ""
     expected = settings.admin_api_key or ""
+
     if not expected:
-        raise AuthError("Admin API key is not configured on the server.", status_code=503)
+        raise AuthError(
+            "Admin API key is not configured; set ADMIN_API_KEY to enable the admin API.",
+            status_code=503,
+        )
+    if expected.casefold() in KNOWN_WEAK_ADMIN_KEYS and not settings.admin_allow_weak_key:
+        logger.error(
+            "ADMIN_API_KEY is still a placeholder from the example config, so the admin "
+            "API is disabled. Generate a real key, or set ADMIN_ALLOW_WEAK_KEY=true for a "
+            "local throwaway."
+        )
+        raise AuthError(
+            "Admin API key is a known placeholder; the admin API is disabled.",
+            status_code=503,
+        )
     if not provided or not hmac.compare_digest(provided, expected):
         raise AuthError("Invalid or missing admin key.", status_code=401)
-    if expected == "change-me-admin-key":
-        logger.warning("Admin API key is still the insecure default; change ADMIN_API_KEY.")
     return Identity(
         email=request.headers.get("X-User-Email"),
         role="admin",

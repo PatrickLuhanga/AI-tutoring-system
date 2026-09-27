@@ -93,8 +93,17 @@ def _p(
     tags: Iterable[str],
     difficulty: str,
     module_id: str | None = None,
+    expects_compile_error: bool = False,
 ) -> dict[str, Any]:
-    """One corpus entry. Keyword-only at the call sites above for readability."""
+    """One corpus entry. Keyword-only at the call sites above for readability.
+
+    ``expects_compile_error`` marks the handful of patterns whose whole teaching
+    point is that the snippet is rejected by ``javac`` - a ``char`` compared to a
+    ``String``, a local captured by an inner class, a raw-type assignment. Those
+    are correct only while they do not compile, so
+    ``tests/test_java_corpus.py`` inverts its assertion for them instead of
+    demanding a clean build.
+    """
     return {
         "error_title": error_title,
         "error_category": error_category,
@@ -106,6 +115,7 @@ def _p(
         "difficulty": difficulty,
         "module_id": module_id,
         "language": LANGUAGE,
+        "expects_compile_error": expects_compile_error,
     }
 
 
@@ -167,6 +177,7 @@ for (int i = 0; i < names.length; i++) {
         "null-reference",
         "java.lang.NullPointerException",
         """
+BufferedReader reader = new BufferedReader(new FileReader("notes.txt"));
 String line = reader.readLine();
 int spaces = line.trim().length();
 """,
@@ -209,7 +220,7 @@ class Account {
         "null-reference",
         "java.util.NoSuchElementException",
         """
-Optional<String> nickname = lookupNickname(id);
+Optional<String> nickname = Optional.empty();
 String value = nickname.get();
 """,
         "This container is explicitly designed to represent the possibility of "
@@ -333,6 +344,7 @@ if (grade == "A") {
         "char is a primitive and String an object; they are never ==.",
         ["char", "String", "comparison", "primitive", "type"],
         "beginner",
+        expects_compile_error=True,
     ),
 
     # --- Types and casting ---------------------------------------------------
@@ -518,6 +530,7 @@ Shape s = new Shape();
         "An abstract class exists to be extended, never instantiated directly.",
         ["abstract", "InstantiationException", "inheritance", "polymorphism"],
         "beginner",
+        expects_compile_error=True,
     ),
     _p(
         "Interface method not implemented at compile time",
@@ -542,6 +555,7 @@ class Canvas implements Drawable {
         "or the class must be abstract.",
         ["interface", "implements", "abstract", "signature", "compile"],
         "beginner",
+        expects_compile_error=True,
     ),
     _p(
         "Superclass field hidden by a same-named subclass field",
@@ -641,6 +655,7 @@ task.run();
         "final.",
         ["inner class", "anonymous", "final", "effectively final", "capture"],
         "advanced",
+        expects_compile_error=True,
     ),
 
     # --- Constructors, initialisers, scope -----------------------------------
@@ -659,6 +674,7 @@ System.out.println(total);
         "Locals have no default value; they must be definitely assigned before use.",
         ["variable", "initialisation", "assignment", "scope", "compile"],
         "beginner",
+        expects_compile_error=True,
     ),
     _p(
         "Field initialiser read by a method the constructor calls",
@@ -762,12 +778,14 @@ String second = new String(in.readAllBytes());
         "io",
         "java.io.IOException",
         """
-BufferedReader reader = new BufferedReader(new FileReader("notes.txt"));
-String line = reader.readLine();
-if (line == null) {
-    return null;
+String firstLine(String path) throws IOException {
+    BufferedReader reader = new BufferedReader(new FileReader(path));
+    String line = reader.readLine();
+    if (line == null) {
+        return null;
+    }
+    return line.trim();
 }
-return line.trim();
 """,
         "There is a path through this method that leaves before the last line runs. "
         "Who is responsible for releasing the underlying file handle on each of the "
@@ -783,7 +801,7 @@ return line.trim();
         "io",
         "java.sql.SQLException: No operations allowed after connection closed",
         """
-Connection conn = DriverManager.getConnection(url, user, pass);
+Connection conn = DriverManager.getConnection("jdbc:postgresql://localhost/dut", "user", "pass");
 conn.close();
 Statement st = conn.createStatement();
 ResultSet rs = st.executeQuery("SELECT 1");
@@ -801,7 +819,7 @@ ResultSet rs = st.executeQuery("SELECT 1");
         None,
         """
 try {
-    saveResult();
+    System.out.println("saving");
 } catch (Exception e) {
 }
 System.out.println("saved");
@@ -819,7 +837,7 @@ System.out.println("saved");
         None,
         """
 try {
-    parse(input);
+    Integer.parseInt("not a number");
 } finally {
     System.out.println("done");
 }
@@ -875,7 +893,7 @@ for (String k : keys) {
         "null-reference",
         "java.lang.NullPointerException",
         """
-Properties config = loadConfig();
+Properties config = new Properties();
 String host = config.getProperty("host").trim();
 """,
         "The chain reads as though each call had something real to work on. What "
@@ -920,6 +938,7 @@ Integer code = values.get(0);
         "fails later at runtime.",
         ["generics", "raw type", "erasure", "ArrayList", "type safety"],
         "advanced",
+        expects_compile_error=True,
     ),
     _p(
         "Stream consumed twice so the second operation finds nothing",
@@ -942,8 +961,9 @@ long again = modules.stream().count();
         "streams",
         "java.lang.IllegalStateException: Duplicate key",
         """
+List<String> modules = List.of("IPRT301", "IPRT302", "PBDV301");
 Map<String, Integer> lengths = modules.stream()
-    .collect(Collectors.toMap(m -> m.substring(0, 2), m -> m.length()));
+    .collect(Collectors.toMap(m -> m.substring(0, 4), m -> m.length()));
 """,
         "Two different module names can produce the same short key. When two inputs "
         "map to one key, which one does the collector have no way of choosing "

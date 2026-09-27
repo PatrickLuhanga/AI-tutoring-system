@@ -55,6 +55,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.agents import TutoringWorkflow  # noqa: E402
 from src.agents.intent_agent import Intent  # noqa: E402
+from src.config import settings  # noqa: E402
 from src.prompts import INTENT_ROUTES, ROUTE_DIRECT  # noqa: E402
 from src.retriever import RetrievalPolicy, RetrievalResult, get_retriever  # noqa: E402
 from eval.run_retrieval_eval import Row, load_rows  # noqa: E402
@@ -396,11 +397,101 @@ def main(argv: list[str] | None = None) -> int:
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(
-            json.dumps({"config": config, "turns": [t.__dict__ for t in turns]}, indent=2),
+            json.dumps(
+                {"config": config, "environment": _environment(), "turns": [t.__dict__ for t in turns]},
+                indent=2,
+            ),
             encoding="utf-8",
         )
         print(f"\n  per-turn detail written to {args.out}")
     return 0
+
+
+def _environment() -> dict:
+    """Record what produced these numbers.
+
+    A results file that does not say which model wrote the answers, which host ran
+    them, or which corpus backed them is not reproducible, and one past outlier
+    (a single 990s turn against a 53s median) could not be diagnosed at all because
+    the file never recorded the model. The environment is captured for every run
+    from now on.
+    """
+    import platform
+    import subprocess
+
+    info: dict = {
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        "embedding_model": settings.embedding_model_name,
+        "retrieval_max_distance": settings.retrieval_max_distance,
+        "retrieval_expand_on_weak": settings.retrieval_expand_on_weak,
+        "retrieval_weak_distance": settings.retrieval_weak_distance,
+        "llm_max_tokens": settings.llm_max_tokens,
+        "intent_use_llm": settings.intent_use_llm,
+        "scaffolding_evidence_based": settings.scaffolding_evidence_based,
+        "guardrail_max_code_lines": settings.guardrail_max_code_lines,
+        "guardrail_max_words": settings.guardrail_max_words,
+    }
+    try:
+        from src.db import session_scope
+        from src.models import LLMConfig
+        from sqlalchemy import select
+
+        with session_scope() as session:
+            row = session.execute(
+                select(LLMConfig).where(LLMConfig.is_active.is_(True)).limit(1)
+            ).scalar_one_or_none()
+            if row is not None:
+                info["llm_provider"] = row.provider
+                info["llm_model"] = row.local_model or row.cloud_model
+                info["llm_max_tokens"] = row.max_tokens
+    except Exception as exc:  # noqa: BLE001 - provenance is best-effort
+        info["llm_model"] = f"(unavailable: {exc})"
+
+    try:
+        out = subprocess.run(
+            ["ollama", "list"], capture_output=True, text=True, timeout=15
+        )
+        if out.returncode == 0:
+            info["ollama_models"] = [
+                line.split()[0] for line in out.stdout.splitlines()[1:] if line.split()
+            ]
+    except Exception:  # noqa: BLE001
+        pass
+    return info
+
+
+def _latency_summary(turns: list[Turn]) -> dict:
+    """Latency statistics that survive one pathological turn.
+
+    The mean is dominated by a single stalled turn - 990s against a 53s median
+    moved it from 57s to 174s, which is not a description of the system. The
+    median and the p95 are reported alongside it, and the worst turns are named so
+    an outlier is visible rather than silently averaged in.
+    """
+    values = sorted(t.latency_ms for t in turns)
+    if not values:
+        return {}
+    n = len(values)
+
+    def percentile(p: float) -> int:
+        index = min(n - 1, int(round(p * (n - 1))))
+        return values[index]
+
+    worst = sorted(turns, key=lambda t: -t.latency_ms)[:3]
+    return {
+        "n": n,
+        "min_ms": values[0],
+        "median_ms": percentile(0.5),
+        "p95_ms": percentile(0.95),
+        "max_ms": values[-1],
+        "mean_ms": sum(values) // n,
+        "max_over_median": round(values[-1] / percentile(0.5), 1) if percentile(0.5) else None,
+        "worst_turns": [
+            {"test_id": t.test_id, "latency_ms": t.latency_ms, "route": t.route}
+            for t in worst
+        ],
+    }
 
 
 def _report(turns: list[Turn], config: str, args) -> None:
@@ -480,8 +571,16 @@ def _report(turns: list[Turn], config: str, args) -> None:
                   f"code_lines={t.max_code_lines} leak={t.leak_ngram}")
     else:
         print("  bypass handling                   : n/a (no bypass questions completed)")
-    print(f"  mean latency                      : "
-          f"{sum(t.latency_ms for t in turns) / n / 1000:.0f}s per turn")
+    latency = _latency_summary(turns)
+    print(f"  latency  median / p95 / max       : "
+          f"{latency['median_ms'] / 1000:.0f}s / {latency['p95_ms'] / 1000:.0f}s / "
+          f"{latency['max_ms'] / 1000:.0f}s")
+    print(f"  latency  mean (outlier-sensitive) : {latency['mean_ms'] / 1000:.0f}s "
+          f"(max is {latency['max_over_median']}x the median)")
+    for entry in latency["worst_turns"]:
+        if entry["latency_ms"] > 2 * latency["median_ms"]:
+            print(f"      OUTLIER {entry['test_id']:<9} {entry['latency_ms'] / 1000:.0f}s "
+                  f"route={entry['route']}  <- report the median, not the mean")
 
     # A config is only comparable with another if it scored the same questions.
     completed = sorted(t.test_id for t in turns)

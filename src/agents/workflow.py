@@ -148,7 +148,9 @@ class TutoringWorkflow:
         intent = self.intent_agent.classify(request.message, module_name, request.history)
         # ``determine_stage`` returns the neutral ``direct_answer`` stage for the
         # factual track, so telemetry stays consistent without a Socratic stage.
-        stage, depth = self.scaffolding.determine_stage(prior_turns, intent, request.message)
+        stage, depth = self.scaffolding.determine_stage(
+            prior_turns, intent, request.message, request.history
+        )
         direct = intent.route == ROUTE_DIRECT
 
         # Data Tier: degrade to empty context if the vector store is unreachable.

@@ -199,6 +199,15 @@ class Settings:
     # Authentication / authorization
     auth_mode: str
     admin_api_key: str
+    #: Allow a placeholder ADMIN_API_KEY to authenticate. Local throwaway only.
+    admin_allow_weak_key: bool
+    #: Advance the Socratic stages on demonstrated attempts rather than on the
+    #: number of turns elapsed. On a turn count, "ok thanks" five times reaches the
+    #: Explanation stage and unlocks worked solutions without any work shown.
+    scaffolding_evidence_based: bool
+    #: Turns a student may stall at one stage before the ladder moves anyway, so a
+    #: student who never attempts is not stranded by the rule above.
+    scaffolding_max_stalled_turns: int
     enforce_enrollment: bool
     cors_allowed_origins: str
 
@@ -345,12 +354,26 @@ def _build_settings() -> Settings:
         flask_port=_int("FLASK_PORT", 5000),
         flask_debug=_bool("FLASK_DEBUG", False),
         auth_mode=_str("AUTH_MODE", "dev").lower(),
-        admin_api_key=_str("ADMIN_API_KEY", "change-me-admin-key"),
+        # Fails closed. A shipped default that works is a shipped default that is
+        # never changed: it was "change-me-admin-key", .env.example handed out a
+        # working key, and the local .env ended up using that example value
+        # verbatim. Empty means require_admin() returns 503 and the admin API is
+        # simply unavailable until someone sets a real key.
+        admin_api_key=_str("ADMIN_API_KEY", ""),
+        #: Escape hatch for a local throwaway only. Never set this on a host
+        #: reachable by anyone else; it re-enables a known-placeholder key.
+        admin_allow_weak_key=_bool("ADMIN_ALLOW_WEAK_KEY", False),
+        scaffolding_evidence_based=_bool("SCAFFOLDING_EVIDENCE_BASED", True),
+        scaffolding_max_stalled_turns=_int("SCAFFOLDING_MAX_STALLED_TURNS", 6),
         enforce_enrollment=_bool("ENFORCE_ENROLLMENT", False),
         cors_allowed_origins=_str("CORS_ALLOWED_ORIGINS", "*"),
         default_llm_provider=_str("LLM_PROVIDER", "local").lower(),
         ollama_base_url=_str("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"),
-        default_local_model=_str("DEFAULT_LOCAL_MODEL", "qwen3:4b"),
+        # Matches the model the evaluation numbers were collected with. This used
+        # to default to qwen3:4b, a reasoning model: 196-591s per turn on a
+        # CPU-only host and empty replies about 21% of the time. A machine with no
+        # .env silently got the slow one.
+        default_local_model=_str("DEFAULT_LOCAL_MODEL", "qwen2.5:3b-instruct"),
         default_cloud_provider=_str("DEFAULT_CLOUD_PROVIDER", "openai").lower(),
         default_cloud_base_url=_str("DEFAULT_CLOUD_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
         default_cloud_model=_str("DEFAULT_CLOUD_MODEL", "gpt-4o-mini"),

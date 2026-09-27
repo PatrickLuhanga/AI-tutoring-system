@@ -28,12 +28,21 @@ _CODE_LINE_RE = re.compile(
     r"System\.out|console\.log|print\s*\(|for\s*\(|while\s*\(|if\s*\(|"
     r"[\w<>\[\]]+\s+\w+\s*=\s*new\b|back\s*=\s)"
 )
+#: Phrasings that hand over a finished artefact.
+#:
+#: The adjective run is ``{0,2}`` rather than a single word because "the complete
+#: working solution" and "the final working code" are ordinary English and both
+#: slipped past a single-adjective pattern - verified with a live audit, where
+#: "Here's the complete working solution:" followed by a code block passed
+#: unflagged.
 _DIRECT_ANSWER_RE = re.compile(
     r"(?i)\b("
-    r"here(?:'| i)?s the (?:full|complete|final|working) (?:code|solution|answer|program)|"
-    r"the (?:full|complete|final|working) (?:code|solution|answer|program) is|"
-    r"this is the (?:full|complete|final|working) (?:code|solution|answer|program)|"
-    r"copy (?:and )?(?:paste )?this|just (?:copy|paste|use) this|"
+    r"(?:here(?:'| i)?s|this is|that is|below is|below are)\s+the\s+"
+    r"(?:(?:full|complete|final|finished|working|ready|correct|polished)\s+){0,2}"
+    r"(?:code|solution|answer|program|implementation|solution)"
+    r"|the\s+(?:(?:full|complete|final|finished|working|ready|correct)\s+){0,2}"
+    r"(?:code|solution|answer|program|implementation)\s+(?:is|below|here)"
+    r"|copy (?:and )?(?:paste )?this|just (?:copy|paste|use) this|"
     r"solve(?:d)? it for you"
     r")\b"
 )
