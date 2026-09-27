@@ -393,6 +393,95 @@ def render_resource_page(
 </html>"""
 
 
+def render_module_index(
+    module_id: str,
+    module_name: str,
+    documents: list[dict],
+) -> str:
+    """Styled index of one module's documents, grouped by provenance."""
+    from html import escape
+
+    groups: dict[str, list[dict]] = {}
+    for doc in documents:
+        groups.setdefault(doc.get("source_category", "notes"), []).append(doc)
+
+    order = ["slides", "notes", "exercises", "examples", "tutorials", "books", "tutor_answers"]
+    labels = {
+        "slides": "Lecture slides",
+        "notes": "Lecture notes",
+        "exercises": "Exercises",
+        "examples": "Worked examples",
+        "tutorials": "Tutorials",
+        "books": "Textbooks (third-party)",
+        "tutor_answers": "Tutor answers",
+    }
+    ordered = [c for c in order if c in groups] + [
+        c for c in sorted(groups) if c not in order
+    ]
+
+    blocks = []
+    for category in ordered:
+        items = groups[category]
+        rows = []
+        for doc in items:
+            size_kb = doc.get("size_bytes", 0) / 1024
+            size = f"{size_kb / 1024:.1f} MB" if size_kb >= 1024 else f"{size_kb:.0f} KB"
+            third = " third-party" if category == "books" else ""
+            rows.append(
+                f'<li><a href="{escape(doc["url"])}">'
+                f'<span class="doc-name">{escape(doc["name"])}</span>'
+                f'<span class="doc-meta">{escape(size)}{third}</span></a></li>'
+            )
+        blocks.append(
+            f'<section class="group"><h2>{escape(labels.get(category, category))}'
+            f'<span class="count">{len(items)}</span></h2>'
+            f'<ul>{"".join(rows)}</ul></section>'
+        )
+
+    total = len(documents)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{escape(module_id)} &middot; {escape(module_name)}</title>
+<style>{_CSS}
+main {{ max-width: 900px; }}
+.group {{ margin: 0 0 26px; }}
+.group h2 {{ font-size: 15px; text-transform: uppercase; letter-spacing: .06em;
+             color: var(--muted); border: 0; padding: 0; margin: 0 0 10px;
+             display: flex; align-items: center; gap: 8px; }}
+.group h2 .count {{ background: var(--code-bg); color: var(--muted); border-radius: 999px;
+                    padding: 1px 8px; font-size: 11px; letter-spacing: 0; }}
+.group ul {{ list-style: none; margin: 0; padding: 0;
+             background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+             overflow: hidden; }}
+.group li + li {{ border-top: 1px solid var(--line); }}
+.group a {{ display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+            padding: 10px 14px; text-decoration: none; color: inherit; }}
+.group a:hover {{ background: var(--accent-soft); }}
+.doc-name {{ font-size: 14px; font-weight: 500; }}
+.group a:hover .doc-name {{ color: var(--accent); }}
+.doc-meta {{ color: var(--muted); font-size: 12px; white-space: nowrap; }}
+</style>
+</head>
+<body>
+<header class="site">
+  <span class="brand">AI Tutor</span>
+  <span class="crumb">{escape(module_id)} &middot; {escape(module_name)}</span>
+  <span class="spacer"></span>
+  {module_nav(module_id)}
+</header>
+<main>
+  <h1 class="doc">{escape(module_name)}</h1>
+  <p class="meta">{escape(module_id)} &middot; {total} document(s)</p>
+  {"".join(blocks) if blocks else "<p>No documents have been ingested for this module yet.</p>"}
+  <footer class="doc"><a href="/">Back to the tutor</a></footer>
+</main>
+</body>
+</html>"""
+
+
 def json_str(value: str) -> str:
     """JSON-encode a string for safe embedding inside a <script> block."""
     import json

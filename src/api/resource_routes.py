@@ -28,6 +28,7 @@ from ..corpus_render import (
     RENDERABLE_SUFFIXES,
     content_root,
     render_markdown_document,
+    render_module_index,
     render_resource_page,
     resolve_doc_path,
 )
@@ -165,6 +166,18 @@ def get_document_json(module_id: str, rel_path: str):
         ),
         200,
     )
+
+
+@resource_bp.get("/resources/<module_id>")
+@resource_bp.get("/resources/<module_id>/")
+def get_module_index(module_id: str):
+    """Styled index of a module's documents, grouped by provenance."""
+    resolved = _resolve(module_id)
+    if resolved is None:
+        return _not_found_page("Unknown module."), 404
+    _folder, record = resolved
+    page = render_module_index(record["module_id"], record["module_name"], _list_documents(module_id))
+    return page, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
 @resource_bp.get("/resources/<module_id>/<path:rel_path>")
