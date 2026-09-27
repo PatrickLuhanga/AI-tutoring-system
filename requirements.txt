@@ -35,3 +35,6 @@ requests>=2.31.0
 cryptography>=42.0.0
 # Optional: enables browser access from the Client Tier.
 flask-cors>=4.0.0
+
+# Test suite (tests/).
+pytest>=8.0
