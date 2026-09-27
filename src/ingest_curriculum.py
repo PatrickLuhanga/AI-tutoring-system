@@ -1,12 +1,17 @@
 """Curriculum ingestion pipeline.
 
-Walks the ``academic content`` folder, extracts text from every supported
-document, chunks it with LangChain's ``RecursiveCharacterTextSplitter``,
-generates local embeddings with ``all-MiniLM-L6-v2`` and upserts the result into
-``curriculum_chunks``.
+Walks the ``academic content`` folder, extracts Markdown from every supported
+document, chunks it on the document's own heading hierarchy with LangChain's
+``MarkdownHeaderTextSplitter``, generates local embeddings and upserts the result
+into ``curriculum_chunks``.
 
-Every chunk is tagged with the ``module_id`` of its top-level folder so the RAG
-Orchestrator can apply a metadata filter before the similarity search.
+Chunking is heading-aware: a chunk never spans two topics, and each chunk's
+embedded text is prefixed with a contextual breadcrumb
+(``module › topic › heading path``) so the vector carries the context that the
+surrounding document would otherwise provide.
+
+Every chunk is still tagged with the ``module_id`` of its top-level folder so the
+RAG Orchestrator can apply a metadata filter before the similarity search.
 
 Usage:
     python -m src.ingest_curriculum --dry-run
@@ -23,7 +28,7 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from sqlalchemy import delete, func, insert, select
 from tqdm import tqdm
@@ -52,60 +57,145 @@ class IngestionStats:
         self.per_module[module_id] = self.per_module.get(module_id, 0) + chunks
 
 
-def build_splitter():
-    """Return a LangChain recursive character splitter honouring .env sizes."""
+HEADING_KEYS = ("h1", "h2", "h3", "h4", "h5", "h6")
+
+#: ``MarkdownHeaderTextSplitter`` config: heading marker -> metadata key.
+_MARKDOWN_HEADERS = [("#" * level, key) for level, key in enumerate(HEADING_KEYS, start=1)]
+
+#: Separator used inside the contextual breadcrumb (module > topic > headings).
+_BREADCRUMB_SEP = " › "
+
+
+class ChunkSplitters(NamedTuple):
+    """The two splitters that make up the chunking strategy."""
+
+    markdown: "MarkdownHeaderTextSplitter"
+    fallback: "RecursiveCharacterTextSplitter"
+
+
+class _ChunkFragment(NamedTuple):
+    """Minimal stand-in for a LangChain ``Document`` on the fallback path."""
+
+    page_content: str
+    metadata: dict
+
+
+def build_splitters() -> ChunkSplitters:
+    """Build the heading-aware splitter plus a size fallback.
+
+    ``MarkdownHeaderTextSplitter`` cuts each document on its own heading
+    hierarchy so chunks stay on one topic; the fallback recursive splitter only
+    breaks up a single section that is still larger than ``CHUNK_SIZE``.
+    """
     try:
-        from langchain_text_splitters import RecursiveCharacterTextSplitter
+        from langchain_text_splitters import (
+            MarkdownHeaderTextSplitter,
+            RecursiveCharacterTextSplitter,
+        )
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError(
             "langchain-text-splitters is required. Run `pip install -r requirements.txt`."
         ) from exc
 
-    return RecursiveCharacterTextSplitter(
+    markdown = MarkdownHeaderTextSplitter(
+        headers_to_split_on=_MARKDOWN_HEADERS,
+        strip_headers=True,
+    )
+    fallback = RecursiveCharacterTextSplitter(
         chunk_size=settings.chunk_size,
         chunk_overlap=settings.chunk_overlap,
         length_function=len,
         separators=["\n\n", "\n", ". ", " ", ""],
     )
+    return ChunkSplitters(markdown=markdown, fallback=fallback)
 
 
 def _hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def build_chunk_rows(content_file: ContentFile, sections: list[Section], splitter) -> list[dict]:
-    """Turn extracted sections into DB-ready rows (without embeddings)."""
+def _breadcrumb(content_file: ContentFile, heading_path: list[str]) -> str:
+    """Compose the ``module › topic › heading path`` contextual prefix."""
+    parts = [content_file.module_id, content_file.topic, *heading_path]
+    return _BREADCRUMB_SEP.join(part for part in parts if part)
+
+
+def _split_section(section: Section, splitters: ChunkSplitters) -> list:
+    """Split one section's Markdown into heading-scoped fragments."""
+    try:
+        fragments = splitters.markdown.split_text(section.text)
+    except Exception as exc:  # noqa: BLE001 - never lose a section to a splitter bug
+        logger.warning("Markdown split failed (%s); using the section as-is", exc)
+        fragments = []
+    if fragments:
+        return fragments
+    return [_ChunkFragment(page_content=section.text, metadata={})]
+
+
+def build_chunk_rows(
+    content_file: ContentFile, sections: list[Section], splitters: ChunkSplitters
+) -> list[dict]:
+    """Turn extracted sections into DB-ready rows (without embeddings).
+
+    The heading path is prepended to the embedded text as a breadcrumb so the
+    vector itself carries the context the surrounding document would provide.
+    """
     rows: list[dict] = []
     chunk_index = 0
     for section in sections:
-        for chunk_text in splitter.split_text(section.text):
-            text = chunk_text.strip()
-            if not text:
+        for fragment in _split_section(section, splitters):
+            body = (fragment.page_content or "").strip()
+            if not body:
                 continue
-            rows.append(
-                {
-                    "module_id": content_file.module_id,
-                    "source_file": content_file.rel_path,
-                    "source_name": content_file.path.name,
-                    "source_type": content_file.source_type,
-                    "topic": content_file.topic,
-                    "section_title": section.title[:512],
-                    "chunk_index": chunk_index,
-                    "chunk_text": text,
-                    "token_count": len(text.split()),
-                    "content_hash": _hash(text),
-                    "doc_metadata": {
-                        "module_folder": content_file.module_folder,
-                        "module_id": content_file.module_id,
-                        "rel_path": content_file.rel_path,
-                        "topic": content_file.topic,
-                        "section_title": section.title,
-                        "source_type": content_file.source_type,
-                    },
-                    "embedding_model": settings.embedding_model_name,
-                }
+
+            heading_path = [
+                fragment.metadata[key] for key in HEADING_KEYS if fragment.metadata.get(key)
+            ]
+            # Documents without detected headings (tables, CSVs, plain text)
+            # still get a meaningful breadcrumb: the section title stands in
+            # for the heading path so the prefix always names the source.
+            breadcrumb = _breadcrumb(content_file, heading_path or ([section.title] if section.title else []))
+            section_title = (heading_path[-1] if heading_path else section.title)[:512]
+
+            body_parts = (
+                splitters.fallback.split_text(body)
+                if len(body) > settings.chunk_size
+                else [body]
             )
-            chunk_index += 1
+            strategy = "markdown-header" if len(body_parts) == 1 else "markdown-header+recursive"
+
+            for part in body_parts:
+                text = part.strip()
+                if not text:
+                    continue
+                chunk_text = f"{breadcrumb}\n\n{text}" if breadcrumb else text
+                rows.append(
+                    {
+                        "module_id": content_file.module_id,
+                        "source_file": content_file.rel_path,
+                        "source_name": content_file.path.name,
+                        "source_type": content_file.source_type,
+                        "topic": content_file.topic,
+                        "section_title": section_title,
+                        "chunk_index": chunk_index,
+                        "chunk_text": chunk_text,
+                        "token_count": len(chunk_text.split()),
+                        "content_hash": _hash(chunk_text),
+                        "doc_metadata": {
+                            "module_folder": content_file.module_folder,
+                            "module_id": content_file.module_id,
+                            "rel_path": content_file.rel_path,
+                            "topic": content_file.topic,
+                            "section_title": section_title,
+                            "source_type": content_file.source_type,
+                            "heading_path": heading_path,
+                            "breadcrumb": breadcrumb,
+                            "chunk_strategy": strategy,
+                        },
+                        "embedding_model": settings.embedding_model_name,
+                    }
+                )
+                chunk_index += 1
     return rows
 
 
@@ -116,13 +206,13 @@ def _embed_rows(rows: list[dict], embedder) -> None:
         row["embedding"] = [float(value) for value in vector]
 
 
-def ingest_file(content_file: ContentFile, splitter, embedder, dry_run: bool) -> tuple[int, bool]:
+def ingest_file(content_file: ContentFile, splitters: ChunkSplitters, embedder, dry_run: bool) -> tuple[int, bool]:
     """Ingest a single file. Returns ``(chunks_written, was_empty)``."""
     sections = extract_sections(content_file.path)
     if not sections:
         return 0, True
 
-    rows = build_chunk_rows(content_file, sections, splitter)
+    rows = build_chunk_rows(content_file, sections, splitters)
     if not rows:
         return 0, True
     if dry_run:
@@ -162,7 +252,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.dry_run and args.reset:
         reset_table()
 
-    splitter = build_splitter()
+    splitters = build_splitters()
     embedder = None if args.dry_run else get_embedder()
 
     files = list(
@@ -184,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
     stats = IngestionStats(files_seen=len(files))
     for content_file in tqdm(files, desc="Ingesting", unit="file"):
         try:
-            written, empty = ingest_file(content_file, splitter, embedder, args.dry_run)
+            written, empty = ingest_file(content_file, splitters, embedder, args.dry_run)
         except Exception as exc:  # noqa: BLE001 - continue on individual failures
             stats.errors += 1
             logger.error("Failed %s: %s", content_file.rel_path, exc)
