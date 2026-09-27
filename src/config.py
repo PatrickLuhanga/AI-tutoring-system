@@ -261,6 +261,39 @@ class Settings:
         """Map a top-level content folder (e.g. ``IPRT``) to its module record."""
         return self.modules.get(folder_name.strip().upper())
 
+    def folder_for_module_id(self, module_id: str) -> Optional[str]:
+        """Inverse of :meth:`resolve_module`: the content folder for a ``module_id``.
+
+        The registry key and the module id are deliberately different strings -
+        the folder on disk is ``IPRT`` while rows and URLs carry ``IPRT301``.
+        Code that walks the corpus by ``module_id`` (the resource routes, the
+        citation builder) has to translate, or it looks in a directory that does
+        not exist.
+        """
+        target = (module_id or "").strip()
+        for folder, record in self.modules.items():
+            if record["module_id"] == target:
+                return folder
+        return None
+
+    def resolve_any(self, identifier: str) -> Optional[tuple[str, Dict[str, str]]]:
+        """Resolve either a registry key (``IPRT``) or a module id (``IPRT301``).
+
+        Returns ``(folder, record)``. URLs and chat payloads carry the module id
+        while the corpus is stored under the folder key, so anything crossing
+        between the two should go through here rather than assuming one spelling.
+        """
+        name = (identifier or "").strip()
+        if not name:
+            return None
+        record = self.modules.get(name.upper())
+        if record is not None:
+            return name.upper(), record
+        for folder, candidate in self.modules.items():
+            if candidate["module_id"] == name:
+                return folder, candidate
+        return None
+
     @property
     def supported_extensions(self) -> set[str]:
         return set(SUPPORTED_TEXT_EXTENSIONS)
