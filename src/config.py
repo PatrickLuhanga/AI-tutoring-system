@@ -224,6 +224,18 @@ class Settings:
     retrieval_top_k: int
     retrieval_code_top_k: int
 
+    # Hybrid retrieval (tsvector full-text + pgvector semantic + RRF fusion;
+    # ported from the StatSSA Rafiki RAG design)
+    retrieval_hybrid_enabled: bool
+    retrieval_rrf_k: int
+    retrieval_min_similarity: float
+    retrieval_strict_similarity: float
+    retrieval_max_df_ratio: float
+    retrieval_hybrid_pool_factor: int
+    retrieval_hybrid_min_pool: int
+    retrieval_keyword_weight: float
+    retrieval_vector_weight: float
+
     # Guardrail
     guardrail_enabled: bool
     guardrail_max_code_lines: int
@@ -300,6 +312,15 @@ def _build_settings() -> Settings:
         ollama_health_timeout=_int("OLLAMA_HEALTH_TIMEOUT", 5),
         retrieval_top_k=_int("RETRIEVAL_TOP_K", 6),
         retrieval_code_top_k=_int("RETRIEVAL_CODE_TOP_K", 3),
+        retrieval_hybrid_enabled=_bool("RETRIEVAL_HYBRID_ENABLED", True),
+        retrieval_rrf_k=_int("RETRIEVAL_RRF_K", 60),
+        retrieval_min_similarity=_float("RETRIEVAL_MIN_SIMILARITY", 0.60),
+        retrieval_strict_similarity=_float("RETRIEVAL_STRICT_SIMILARITY", 0.78),
+        retrieval_max_df_ratio=_float("RETRIEVAL_MAX_DF_RATIO", 0.3),
+        retrieval_hybrid_pool_factor=_int("RETRIEVAL_HYBRID_POOL_FACTOR", 6),
+        retrieval_hybrid_min_pool=_int("RETRIEVAL_HYBRID_MIN_POOL", 20),
+        retrieval_keyword_weight=_float("RETRIEVAL_KEYWORD_WEIGHT", 1.0),
+        retrieval_vector_weight=_float("RETRIEVAL_VECTOR_WEIGHT", 1.0),
         guardrail_enabled=_bool("GUARDRAIL_ENABLED", True),
         guardrail_max_code_lines=_int("GUARDRAIL_MAX_CODE_LINES", 8),
         guardrail_max_words=_int("GUARDRAIL_MAX_WORDS", 400),
