@@ -113,12 +113,26 @@ class GuardrailAgent:
             return GuardrailResult(approved_text=original, flagged=False, original_text=original)
 
         flags: list[str] = []
-        if not allow_direct:
-            code_lines = self._count_code_lines(original)
-            if code_lines > self.max_code_lines:
-                flags.append("code_leak")
-            if _DIRECT_ANSWER_RE.search(original):
-                flags.append("direct_answer")
+        # Size is not route-dependent. A definitional answer may legitimately
+        # include a short snippet, but a 23-line class implementation is never a
+        # definition - it is the finished work, on either track. This check
+        # therefore applies to BOTH routes.
+        #
+        # It used to sit inside `if not allow_direct`, so the direct route skipped
+        # it entirely. The no-scaffolding ablation forces every turn onto the
+        # direct route, so that ablation ran with the leak check switched off, and
+        # its worse leak numbers were measuring the guardrail as much as the
+        # scaffolding. Found by that run: a 23-line DAO implementation and a
+        # 14-line RMI client both passed unflagged.
+        code_lines = self._count_code_lines(original)
+        if code_lines > self.max_code_lines:
+            flags.append("code_leak")
+
+        # Phrasing IS route-dependent: "here is the definition" is correct
+        # behaviour for a factual turn and must not be penalised for it.
+        if not allow_direct and _DIRECT_ANSWER_RE.search(original):
+            flags.append("direct_answer")
+
         if len(_WORD_RE.findall(original)) > self.max_words:
             flags.append("too_long")
         if context.strip() and self._overlap_ratio(original, context) < self.min_context_overlap:

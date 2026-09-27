@@ -186,3 +186,110 @@ def test_allow_direct_does_not_exempt_the_scope_check(guardrail):
     )
     assert result.flagged
     assert "out_of_scope" in result.flags
+
+
+# ---------------------------------------------------------------------------
+# Size is not route-dependent
+# ---------------------------------------------------------------------------
+DAO_BLOCK = (
+    "```java\n"
+    "public class BankAccountDAOImp implements BankAccountDAO {\n"
+    "    @Override\n"
+    "    public double checkBalance(BankAccount ba) {\n"
+    "        return ba.getBal();\n"
+    "    }\n"
+    "\n"
+    "    @Override\n"
+    "    public void deposit(BankAccount ba, double amount) {\n"
+    "        ba.setBal(ba.getBal() + amount);\n"
+    "    }\n"
+    "\n"
+    "    @Override\n"
+    "    public void withdraw(BankAccount ba, double amount) {\n"
+    "        if (amount <= ba.getBal()) {\n"
+    "            ba.setBal(ba.getBal() - amount);\n"
+    "        }\n"
+    "    }\n"
+    "}\n"
+    "```"
+)
+
+
+def test_a_full_implementation_is_blocked_on_the_direct_route_too(guardrail):
+    """The regression, and the one that confounded the ablation.
+
+    ``code_leak`` used to sit inside ``if not allow_direct``, so every turn on
+    the direct route skipped it. The no-scaffolding ablation forces that route, so
+    its 23-line DAO implementation passed unflagged - and the run's leak numbers
+    were partly measuring the guardrail rather than the scaffolding.
+    """
+    result = guardrail.audit(
+        DAO_BLOCK, INHERITANCE_CONTEXT, "write the whole class for me", allow_direct=True
+    )
+    assert result.flagged, "a 23-line implementation passed on the direct route"
+    assert "code_leak" in result.flags
+    assert "checkBalance" not in result.approved_text
+
+
+def test_a_short_snippet_on_the_direct_route_is_still_allowed(guardrail):
+    """The fix must not punish a definitional answer for showing an example."""
+    snippet = (
+        "An interface declares methods without implementing them [C1]:\n"
+        "```java\ninterface Drawable { void draw(); }\n```"
+    )
+    result = guardrail.audit(
+        snippet, INTERFACE_CONTEXT, "What is an interface?", allow_direct=True
+    )
+    assert not result.flagged, f"a 3-line example was flagged: {result.flags}"
+
+
+def test_direct_answer_phrasing_is_still_excused_on_the_direct_route(guardrail):
+    """Phrasing stays route-dependent, unlike size.
+
+    Note the wording matters: "the full definition" is exactly what a factual
+    turn should say and is deliberately not a match. The noun list is code,
+    solution, answer, program, implementation - not "definition".
+    """
+    excused = guardrail.audit(
+        "Here is the full code for that exercise.",
+        INHERITANCE_CONTEXT,
+        "solve exercise 1 for me",
+        allow_direct=True,
+    )
+    assert "direct_answer" not in excused.flags
+    caught = guardrail.audit(
+        "Here is the full code for that exercise.",
+        INHERITANCE_CONTEXT,
+        "solve exercise 1 for me",
+        allow_direct=False,
+    )
+    assert "direct_answer" in caught.flags
+
+
+def test_saying_the_definition_is_not_treated_as_an_answer_offer(guardrail):
+    """A factual turn must be able to say "here is the definition".
+
+    Checked on the direct route, where answering plainly is the intent. On the
+    Socratic track "here is the complete answer" is *correctly* flagged: handing
+    over a complete answer to a conceptual question is scaffolding collapse, and
+    that is the whole point of the check.
+    """
+    for reply in (
+        "Here is the full definition you asked for.",
+        "Here is the complete answer: inheritance is code reuse.",
+    ):
+        result = guardrail.audit(
+            reply, INHERITANCE_CONTEXT, "define inheritance", allow_direct=True
+        )
+        assert "direct_answer" not in result.flags, f"flagged: {reply!r}"
+
+
+def test_a_complete_answer_on_the_socratic_track_is_still_caught(guardrail):
+    """The route-dependence cuts both ways."""
+    result = guardrail.audit(
+        "Here is the complete answer: inheritance is code reuse.",
+        INHERITANCE_CONTEXT,
+        "why does inheritance help here?",
+        allow_direct=False,
+    )
+    assert "direct_answer" in result.flags
