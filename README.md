@@ -30,7 +30,7 @@ out of scope.
 | Vector store: code-repair patterns (§14) | `code_repair_patterns` |
 | Local, lightweight embedding model (§10.3) | `all-MiniLM-L6-v2` via SentenceTransformers (384-dim) |
 | Module scope as a metadata filter (§4.1, §8.3) | every vector row is tagged with `module_id` |
-| Synthetic Java error corpus | 50 hand-authored patterns (`src/corpora/java_error_corpus.py`) |
+| Synthetic Java error corpus | 50 patterns, LLM-drafted and unreviewed (`src/corpora/java_error_corpus.py`) |
 
 The architecture document names `nomic-embed-text` (768-dim) as the working embedding choice. This
 data tier defaults to `all-MiniLM-L6-v2` (384-dim) because it is smaller, fully local and free, and
