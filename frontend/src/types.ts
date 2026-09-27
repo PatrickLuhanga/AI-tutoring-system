@@ -54,11 +54,30 @@ export interface GuardrailResult {
 
 export interface RetrievedChunk {
   chunk_id: number
+  cite_key: string
   module_id: string
   source_name: string
+  source_file: string
   section_title: string | null
   distance: number
+  source_category: string
+  is_answer: boolean
+  url: string
+  anchor: string
   preview: string
+}
+
+/** One retrievable source, with a deep link into the rendered corpus page. */
+export interface Citation {
+  cite_key: string
+  module_id: string
+  source_file: string
+  section_title: string | null
+  url: string
+  anchor: string
+  distance: number
+  source_category: string
+  is_answer: boolean
 }
 
 export interface RetrievedPattern {
@@ -75,6 +94,11 @@ export interface RetrievalResult {
   module_id: string
   chunks: RetrievedChunk[]
   patterns: RetrievedPattern[]
+  citations?: Citation[]
+  grounding_categories?: string[]
+  third_party_fallback?: boolean
+  below_threshold?: number
+  context_empty?: boolean
 }
 
 export interface LLMResult {

@@ -32,8 +32,19 @@ from sqlalchemy import func, select
 from ..config import settings
 from ..db import session_scope
 from ..llm_router import LLMError, LLMResponse, LLMRouter, get_router
-from ..models import Module, TelemetryLog
-from ..retriever import RetrievalPolicy, RetrievalResult, Retriever, get_retriever
+from ..models import CurriculumChunk, Module, TelemetryLog
+from ..query_expansion import (
+    QueryExpander,
+    is_weak_result,
+    reciprocal_rank_fusion,
+)
+from ..retriever import (
+    RetrievalPolicy,
+    RetrievalResult,
+    RetrievedChunk,
+    Retriever,
+    get_retriever,
+)
 from ..prompts import ROUTE_DIRECT
 from ..unanswered import classify_reason, record_ungrounded
 from .guardrail import GuardrailAgent, GuardrailResult
@@ -98,6 +109,7 @@ class TutoringWorkflow:
         self.scaffolding = scaffolding or ScaffoldingLayer()
         self.tutor = tutor or TutorAgent(self.router)
         self.guardrail = guardrail or GuardrailAgent()
+        self.expander = QueryExpander(self.router)
 
     def handle(self, request: ChatRequest) -> WorkflowResult:
         started = time.perf_counter()
@@ -176,6 +188,7 @@ class TutoringWorkflow:
             retrieval={
                 "chunks": [c.to_dict() for c in retrieval.chunks],
                 "patterns": [p.to_dict() for p in retrieval.patterns],
+                "citations": retrieval.citations(),
                 "grounding_categories": retrieval.grounding_categories,
                 "third_party_fallback": retrieval.third_party_fallback,
                 "below_threshold": retrieval.below_threshold,
@@ -205,6 +218,12 @@ class TutoringWorkflow:
         Worked solutions are withheld until the session reaches the Explanation
         stage (or is a factual turn, where answering directly is the intent), so
         retrieval cannot collapse the Socratic scaffolding (section 7.4).
+
+        A first pass that comes back weak triggers one adaptive second hop: the
+        question is rewritten into alternative phrasings, grounded in the
+        module's own section titles, and the runs are fused by reciprocal rank.
+        This is what lets an abstract question like "why does code reuse matter?"
+        find the inheritance slides instead of falling back to memory.
         """
         include_patterns = intent.label in {"debugging", "problem_solving"} or bool(
             _CODE_SIGNAL_RE.search(request.message)
@@ -215,11 +234,19 @@ class TutoringWorkflow:
             max_distance=(settings.retrieval_max_distance or None),
         )
         try:
-            return self.retriever.retrieve(
+            first = self.retriever.retrieve(
                 request.message,
                 request.module_id,
                 include_patterns=include_patterns,
                 policy=policy,
+            )
+            if not (
+                settings.retrieval_expand_on_weak
+                and is_weak_result(first.chunks, weak_distance=settings.retrieval_weak_distance)
+            ):
+                return first
+            return self._retrieve_expanded(
+                request, policy, include_patterns, first
             )
         except Exception as exc:  # noqa: BLE001 - Data Tier must not break the turn
             logger.warning(
@@ -228,6 +255,129 @@ class TutoringWorkflow:
                 exc,
             )
             return RetrievalResult(query=request.message, module_id=request.module_id)
+
+    def _retrieve_expanded(
+        self,
+        request: ChatRequest,
+        policy: RetrievalPolicy,
+        include_patterns: bool,
+        first: RetrievalResult,
+    ) -> RetrievalResult:
+        """Second retrieval hop over rewrites of a question that retrieved weakly."""
+        try:
+            titles = self._module_section_titles(request.module_id)
+            rewrites = self.expander.expand(
+                request.message, self._module_name(request.module_id), titles
+            )
+            if not rewrites:
+                logger.info(
+                    "Weak retrieval for %s but no usable rewrite; keeping the first pass.",
+                    request.module_id,
+                )
+                return first
+
+            runs: list[RetrievalResult] = [first]
+            for rewrite in rewrites:
+                runs.append(
+                    self.retriever.retrieve(
+                        rewrite,
+                        request.module_id,
+                        include_patterns=False,
+                        policy=policy,
+                    )
+                )
+
+            merged = self._fuse(first, runs, request, policy, include_patterns)
+            if merged is not None:
+                logger.info(
+                    "Expanded %r into %d rewrite(s); grounding improved "
+                    "(best distance %.3f -> %.3f)",
+                    request.message[:50],
+                    len(rewrites),
+                    first.chunks[0].distance if first.chunks else float("nan"),
+                    merged.chunks[0].distance if merged.chunks else float("nan"),
+                )
+                return merged
+            return first
+        except Exception as exc:  # noqa: BLE001 - enhancement must not break the turn
+            logger.warning("Query expansion failed, using the first pass: %s", exc)
+            return first
+
+    def _module_section_titles(self, module_id: str) -> list[str]:
+        """Section headings for a module, used to ground the rewrite."""
+        try:
+            with session_scope() as session:
+                return list(
+                    session.execute(
+                        select(CurriculumChunk.section_title)
+                        .where(
+                            CurriculumChunk.module_id == module_id,
+                            CurriculumChunk.section_title.isnot(None),
+                        )
+                        .distinct()
+                        .limit(60)
+                    ).scalars()
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Could not list section titles for %s: %s", module_id, exc)
+            return []
+
+    def _fuse(
+        self,
+        first: RetrievalResult,
+        runs: list[RetrievalResult],
+        request: ChatRequest,
+        policy: RetrievalPolicy,
+        include_patterns: bool,
+    ) -> Optional[RetrievalResult]:
+        """Merge several runs into one result, keeping the original query string.
+
+        Citation keys are re-assigned after fusion so ``[C1]`` in a reply still
+        matches the source list the student sees.
+        """
+        by_id: dict[int, RetrievedChunk] = {}
+        for run in runs:
+            for chunk in run.chunks:
+                existing = by_id.get(chunk.chunk_id)
+                if existing is None or chunk.distance < existing.distance:
+                    by_id[chunk.chunk_id] = chunk
+        if not by_id:
+            return None
+
+        ordered_ids = reciprocal_rank_fusion(
+            [[c.chunk_id for c in run.chunks] for run in runs if run.chunks]
+        )
+        pool = {c.chunk_id: c for c in first.chunks}
+        for run in runs[1:]:
+            pool.update({c.chunk_id: c for c in run.chunks})
+
+        merged = RetrievalResult(
+            query=first.query,
+            module_id=first.module_id,
+            policy=first.policy,
+        )
+        limit = getattr(self.retriever, "top_k", 3) or 3
+        # RRF decides which chunks survive; distance decides the order they are
+        # shown in, so the closest match leads the prompt rather than whatever
+        # several runs happened to agree on.
+        survivors = sorted(
+            (by_id[cid] for cid in ordered_ids[: limit * 2] if cid in by_id),
+            key=lambda c: c.distance,
+        )
+        for chunk in survivors:
+            # Skip a chunk from a document already in context, so the reply reads
+            # as one passage instead of two fragments of the same slide deck.
+            if merged.chunks and merged.chunks[-1].source_file == chunk.source_file:
+                continue
+            chunk.cite_key = f"C{len(merged.chunks) + 1}"
+            merged.chunks.append(chunk)
+            if len(merged.chunks) >= limit:
+                break
+        if not merged.chunks:
+            return None
+        if include_patterns:
+            merged.patterns = first.patterns
+        return merged
 
     @staticmethod
     def _queue_if_ungrounded(

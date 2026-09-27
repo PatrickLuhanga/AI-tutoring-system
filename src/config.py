@@ -245,6 +245,13 @@ class Settings:
     #: pgvector >= 0.8.
     hnsw_iterative_scan: str
     hnsw_ef_search: int
+    #: Adaptive retrieval. When a first pass is this weak (nothing returned, or
+    #: the closest chunk further away than this), the question is rewritten into
+    #: alternative search phrasings and retrieved again. Costs one extra
+    #: generation, and only on the turns that need it.
+    retrieval_expand_on_weak: bool
+    #: Cosine distance above which a first-pass result counts as weak.
+    retrieval_weak_distance: float
 
     # Guardrail
     guardrail_enabled: bool
@@ -359,6 +366,8 @@ def _build_settings() -> Settings:
         retrieval_third_party_fallback=_bool("RETRIEVAL_THIRD_PARTY_FALLBACK", True),
         hnsw_iterative_scan=_str("HNSW_ITERATIVE_SCAN", "strict_order").lower(),
         hnsw_ef_search=_int("HNSW_EF_SEARCH", 80),
+        retrieval_expand_on_weak=_bool("RETRIEVAL_EXPAND_ON_WEAK", True),
+        retrieval_weak_distance=_float("RETRIEVAL_WEAK_DISTANCE", 0.55),
         guardrail_enabled=_bool("GUARDRAIL_ENABLED", True),
         guardrail_max_code_lines=_int("GUARDRAIL_MAX_CODE_LINES", 8),
         guardrail_max_words=_int("GUARDRAIL_MAX_WORDS", 400),

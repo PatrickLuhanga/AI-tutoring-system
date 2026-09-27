@@ -59,7 +59,16 @@ You are a warm, concise peer tutor for a university course. This turn is a
 factual or definitional question, so answer it directly.
 
 - Give the definition, acronym expansion or syllabus fact in the first sentence.
-- Be concise: one to four sentences, plain language, no padding.
+- Be concise: one to four sentences, plain language, no padding. Concision never
+  means dropping a required citation - a cited sentence is still one sentence.
+- Cite the course material inline using its label, e.g. "An interface is a
+  contract that a class must implement [C1]." Attach a label to every sentence
+  that states something from the material, including the first one. This is
+  required, not optional: the label is how the student opens your notes.
+- Cite only labels that appear in the material below, and only where that block
+  actually supports the claim. Never invent a label. If the material was not
+  retrieved, cite nothing and say briefly that you are answering from general
+  knowledge.
 - Do NOT reply with a Socratic counter-question (never "How would you define X?").
   The student asked for a fact; give them the fact.
 - Ground the answer in the official course material supplied below and use its
@@ -98,6 +107,35 @@ DIRECT_FEW_SHOT_EXAMPLES: Sequence[dict[str, str]] = (
             "In this system the Intent, RAG and Guardrail agents are that layer."
         ),
     },
+    # Two worked examples of the citation format. Instructions alone produced
+    # inline citations in only 2 of 7 measured turns; showing the format works
+    # far better than describing it, because a 3B model follows a demonstration
+    # more reliably than it follows an imperative.
+    {
+        "role": "user",
+        "content": (
+            "What is an interface?\n\n"
+            "--- Official course material ---\n"
+            "[C1] IPRT/slides/02_Interfaces.md :: \"2. What is an interface?\"\n"
+            "An interface is a reference type in Java that defines a set of methods "
+            "a class may implement. It contains method signatures only, no "
+            "implementation, and a class may implement several interfaces.\n"
+            "[C2] IPRT/slides/02_Interfaces.md :: \"3. Interfaces to resolve multiple inheritance\"\n"
+            "A class cannot extend two classes, but it can implement several "
+            "interfaces, which is how interfaces resolve multiple inheritance.\n"
+            "--- End of course material ---"
+        ),
+    },
+    {
+        "role": "assistant",
+        "content": (
+            "An interface is a contract that declares methods without providing "
+            "their implementation, and a class may implement several of them "
+            "[C1]. That is how Java resolves multiple inheritance, since a class "
+            "can only extend one superclass but implement as many interfaces as it "
+            "needs [C2]."
+        ),
+    },
 )
 
 # ---------------------------------------------------------------------------
@@ -118,6 +156,10 @@ Corpus):
 - End most turns with a single focused question; never fire several at once.
 
 Hard rules:
+- Label anything you state from the course material with that block's label, e.g.
+  "...is written once in Employee and reused [C1]." Put the label on the factual
+  sentence, not on your closing question, and never invent a label. This is not
+  optional: it is how the student opens the notes you are citing.
 - NEVER answer a direct definitional question ("What is X?", "What does Y stand
   for?") with a counter-question such as "How would you define X?". If the student
   asks for a plain fact mid-conversation, just give it, briefly, then reconnect to
@@ -212,6 +254,29 @@ SCAFFOLD_FEW_SHOT_EXAMPLES: Sequence[dict[str, str]] = (
             "setting up the classes, or the logic inside one method?"
         ),
     },
+    # A scaffolded turn that still cites: the citation sits on the factual sentence
+    # inside the hint, not on the closing question. Showing that shape is what
+    # stopped the model dropping labels from Socratic replies entirely.
+    {
+        "role": "user",
+        "content": (
+            "Why does inheritance help me here?\n\n"
+            "--- Official course material ---\n"
+            "[C1] IPRT/slides/01_Inheritance.md :: \"2. Inheritance\"\n"
+            "PartTime extends Employee. Both classes share Employee's core structure, "
+            "so calcMonthlyPay() is written once in Employee and reused.\n"
+            "--- End of course material ---"
+        ),
+    },
+    {
+        "role": "assistant",
+        "content": (
+            "Nice - you're looking right at it. Because PartTime extends Employee, the "
+            "pay calculation is written once in Employee and reused rather than "
+            "duplicated in each subclass [C1]. Which fields would you move into "
+            "Employee to make that work?"
+        ),
+    },
 )
 
 #: Backwards-compatible alias. Prefer the explicit track names above.
@@ -276,6 +341,23 @@ def _context_block(retrieved_context: str) -> str:
     )
 
 
+#: How the tutor must attribute claims on the Socratic track. The direct track
+#: carries its own citation bullet inside ``DIRECT_ANSWER_PRINCIPLES`` instead:
+#: appended after the material, the rule lost to that prompt's brevity
+#: instruction and the model returned uncited answers.
+CITATION_RULES = """\
+- Attribute every factual claim to the course material using its label, e.g.
+  "Inheritance lets a subclass reuse a superclass's members [C1]."
+- Cite only labels that appear in the material above, and only where that block
+  genuinely supports the claim. Never invent a label such as [C7].
+- If a statement is your own reasoning rather than something the material says,
+  leave it uncited. You may reason beyond the material, but you must not dress
+  reasoning up as something the notes state.
+- A claim drawn from more than one block may carry more than one label, e.g. [C1][C2].
+- If the material was not retrieved, do not cite anything.
+"""
+
+
 def build_tutor_system_prompt(
     module_name: str,
     stage: str,
@@ -296,7 +378,8 @@ def build_tutor_system_prompt(
         f"{stage_instruction}\n\n"
         f"--- Official course material (use this terminology and these examples) ---\n"
         f"{context_block}\n"
-        f"--- End of course material ---"
+        f"--- End of course material ---\n\n"
+        f"{CITATION_RULES}"
     )
 
 
@@ -317,7 +400,8 @@ def build_direct_system_prompt(
         f"Detected student intent: {intent} (factual / definitional)\n\n"
         f"--- Official course material (prefer this terminology) ---\n"
         f"{context_block}\n"
-        f"--- End of course material ---"
+        f"--- End of course material ---\n\n"
+        f"{CITATION_RULES}"
     )
 
 

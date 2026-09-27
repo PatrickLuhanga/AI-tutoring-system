@@ -398,3 +398,42 @@ def json_str(value: str) -> str:
     import json
 
     return json.dumps(value)
+
+
+def document_rel_path(source_file: str, module_id: str) -> str:
+    """Reduce a stored ``source_file`` to a path relative to its module folder.
+
+    Ingestion stores ``source_file`` relative to the content root, so it carries
+    the module folder: ``IPRT/slides/01_Inheritance.md``. The resource routes are
+    mounted per module (``/resources/IPRT301/<path>``), so the leading folder has
+    to come off or every citation 404s.
+    """
+    path = (source_file or "").strip().lstrip("/")
+    parts = path.split("/")
+    folder = settings.folder_for_module_id(module_id)
+    if folder and parts and parts[0].upper() == folder.upper():
+        parts = parts[1:]
+    return "/".join(parts)
+
+
+def citation_url(module_id: str, source_file: str, section_title: Optional[str]) -> tuple[str, str]:
+    """Return ``(url, anchor)`` for a retrieved chunk.
+
+    The anchor is derived with the same :func:`slugify` the page renderer uses, so
+    a citation and its target cannot drift. Both ``?at=`` and the bare ``#anchor``
+    fragment are emitted: the fragment makes the browser scroll natively even with
+    scripting unavailable, ``?at=`` drives the highlight.
+
+    Known imprecision: two headings with identical text in one document get
+    ``-2`` / ``-3`` suffixes on the page, and a citation built from the section
+    title alone always resolves to the first. Rare enough in this corpus to accept
+    rather than carry a per-chunk anchor through ingestion.
+    """
+    rel = document_rel_path(source_file, module_id)
+    anchor = slugify(section_title) if section_title else ""
+    if not rel:
+        return "", anchor
+    base = f"/resources/{module_id}/{rel}"
+    if anchor:
+        return f"{base}?at={anchor}#{anchor}", anchor
+    return base, anchor

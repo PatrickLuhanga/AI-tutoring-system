@@ -31,6 +31,7 @@ from typing import Optional
 from sqlalchemy import and_, or_, select, text
 
 from .config import settings
+from .corpus_render import citation_url
 from .db import session_scope
 from .embeddings import get_embedder
 from .loaders import THIRD_PARTY_CATEGORIES
@@ -71,16 +72,26 @@ class RetrievedChunk:
     distance: float
     source_category: str = "notes"
     is_answer: bool = False
+    #: Citation label shown to the model and rendered as a link for the student,
+    #: e.g. ``C1``.
+    cite_key: str = ""
+    #: Deep link into the rendered corpus page, anchored on this chunk's section.
+    url: str = ""
+    anchor: str = ""
 
     def to_dict(self) -> dict:
         return {
             "chunk_id": self.chunk_id,
+            "cite_key": self.cite_key,
             "module_id": self.module_id,
             "source_name": self.source_name,
+            "source_file": self.source_file,
             "section_title": self.section_title,
             "distance": round(self.distance, 4),
             "source_category": self.source_category,
             "is_answer": self.is_answer,
+            "url": self.url,
+            "anchor": self.anchor,
             "preview": (self.text or "")[:240],
         }
 
@@ -136,11 +147,19 @@ class RetrievalResult:
         return sorted({c.source_category for c in self.chunks})
 
     def context_text(self) -> str:
-        """Flatten everything retrieved into one prompt-ready block."""
+        """Flatten everything retrieved into one prompt-ready block.
+
+        Each curriculum block carries a citation label, its source document and
+        its section heading, because the prompt asks the tutor to attribute each
+        claim. A student can then follow the label to the exact notes.
+        """
         blocks: list[str] = []
-        for index, chunk in enumerate(self.chunks, start=1):
+        for chunk in self.chunks:
+            label = chunk.cite_key or f"C{self.chunks.index(chunk) + 1}"
             title = chunk.section_title or chunk.source_name
-            blocks.append(f"[Curriculum {index}] {title}\n{chunk.text}")
+            blocks.append(
+                f"[{label}] {chunk.source_file} :: \"{title}\"\n{chunk.text}"
+            )
         for index, pattern in enumerate(self.patterns, start=1):
             blocks.append(
                 f"[Code pattern {index}] {pattern.error_title} "
@@ -148,6 +167,24 @@ class RetrievalResult:
                 f"Conceptual hint: {pattern.conceptual_tutor_hint}"
             )
         return "\n\n".join(blocks)
+
+    def citations(self) -> list[dict]:
+        """Citation list for the API response, in the order the model saw them."""
+        return [
+            {
+                "cite_key": chunk.cite_key,
+                "module_id": chunk.module_id,
+                "source_file": chunk.source_file,
+                "section_title": chunk.section_title,
+                "url": chunk.url,
+                "anchor": chunk.anchor,
+                "distance": round(chunk.distance, 4),
+                "source_category": chunk.source_category,
+                "is_answer": chunk.is_answer,
+            }
+            for chunk in self.chunks
+            if chunk.cite_key
+        ]
 
 
 class Retriever:
@@ -275,6 +312,9 @@ class Retriever:
             if ceiling is not None and float(dist) > ceiling:
                 dropped += 1
                 continue
+            url, anchor = citation_url(
+                chunk.module_id, chunk.source_file, chunk.section_title
+            )
             chunks.append(
                 RetrievedChunk(
                     chunk_id=chunk.chunk_id,
@@ -286,6 +326,9 @@ class Retriever:
                     distance=float(dist),
                     source_category=chunk.source_category,
                     is_answer=bool(chunk.is_answer),
+                    cite_key=f"C{len(chunks) + 1}",
+                    url=url,
+                    anchor=anchor,
                 )
             )
             if len(chunks) >= self.top_k:

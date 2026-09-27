@@ -5,6 +5,7 @@ import { INITIAL_MESSAGES, MODULES } from '../api/mockData'
 import AuditPanel from '../components/AuditPanel'
 import FeedbackControls from '../components/FeedbackControls'
 import MarkdownMessage from '../components/MarkdownMessage'
+import Sources from '../components/Sources'
 import type { ChatMessage, FeedbackState, Module } from '../types'
 
 const newSessionId = () =>
@@ -161,7 +162,16 @@ export default function StudentChat() {
                 <Bot className="h-4 w-4" />
               </div>
               <div className="min-w-0 max-w-[85%] rounded-2xl rounded-tl-md border border-slate-200 bg-slate-50/70 px-4 py-3 shadow-sm">
-                <MarkdownMessage content={message.content} />
+                <MarkdownMessage
+                  content={message.content}
+                  citations={message.audit?.retrieval.citations}
+                />
+                {message.audit?.retrieval.citations && (
+                  <Sources
+                    citations={message.audit.retrieval.citations}
+                    thirdPartyFallback={message.audit.retrieval.third_party_fallback}
+                  />
+                )}
                 {message.audit && <AuditPanel audit={message.audit} />}
                 <FeedbackControls
                   sessionId={sessionId}
