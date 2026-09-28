@@ -189,7 +189,7 @@ function buildChatResponse(payload: ChatRequestPayload, session: MockSession): C
       confidence: bypass ? 0.88 : 0.9,
       source: 'heuristic',
     },
-    scaffolding: { stage: 'guiding', hint_depth: 1, strategy: 'questioning' },
+    scaffolding: { stage: 'guiding', hint_sequence_depth: 1, strategy: 'questioning' },
     guardrail: {
       flagged: bypass,
       flags: bypass ? ['bypass_attempt'] : [],

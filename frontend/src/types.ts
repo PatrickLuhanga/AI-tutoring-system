@@ -42,14 +42,14 @@ export interface IntentResult {
 
 export interface ScaffoldingResult {
   stage: string
-  hint_depth: number
+  hint_sequence_depth: number
   strategy?: string
 }
 
 export interface GuardrailResult {
   flagged: boolean
   flags: string[]
-  action: 'pass' | 'blocked' | 'truncated' | string
+  action: 'pass' | 'blocked' | 'truncated' | 'flagged' | string
 }
 
 export interface RetrievedChunk {

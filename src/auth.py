@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hmac
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from flask import Request
@@ -21,7 +21,7 @@ from sqlalchemy import select
 
 from .config import settings
 from .db import session_scope
-from .models import Enrollment, Module, Student
+from .models import Enrollment, Module, Student, TutorAssignment
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,8 @@ class Identity:
     source: str  # "dev", "sso", "anonymous"
     #: Dual-role capability: a student may also hold tutor privileges.
     is_tutor: bool = False
+    #: Modules a tutor is explicitly assigned to (RBAC scope); empty otherwise.
+    modules: list[str] = field(default_factory=list)
 
     def roles(self) -> list[str]:
         if self.role == "admin":
@@ -66,6 +68,7 @@ class Identity:
             "student_id": self.student_id,
             "authenticated": self.authenticated,
             "source": self.source,
+            "modules": self.modules,
         }
 
 
@@ -152,13 +155,23 @@ def _load_identity(email: str, requested_role: Optional[str], source: str) -> Id
                 select(Student).where(Student.dut4life_email == email).limit(1)
             ).scalar_one_or_none()
             if student is not None:
+                student_id = int(student.student_id)
+                tutor_modules = [
+                    str(row)
+                    for row in session.execute(
+                        select(TutorAssignment.module_id).where(
+                            TutorAssignment.tutor_id == student_id
+                        )
+                    ).scalars().all()
+                ]
                 return Identity(
                     email=email,
                     role=student.role,
-                    student_id=int(student.student_id),
+                    student_id=student_id,
                     authenticated=True,
                     source=source,
                     is_tutor=bool(student.is_tutor) or student.role == "tutor",
+                    modules=tutor_modules,
                 )
     except Exception as exc:  # noqa: BLE001 - Data Tier must not take the API down
         logger.warning(

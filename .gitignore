@@ -22,7 +22,18 @@ Thumbs.db
 models/
 .cache/
 
-academic content/
-corpora/
+# NOTE: course material (`academic content/`) and the Java error corpus
+# (`src/corpora/`) are version-controlled on purpose: a fresh clone must be able
+# to run the curriculum and code-pattern ingestion without external downloads.
+#
+# Track the documents the ingest loaders read, but not the multi-GB lecture
+# recordings / tool installers: they are huge and several exceed GitHub's
+# 100 MB per-file limit.
+academic content/**/*.mp4
+academic content/**/*.f4v
+academic content/**/*.exe
+academic content/**/*.xxx
+academic content/**/*.zip
+
 venv/
 .venv/

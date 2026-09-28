@@ -39,7 +39,7 @@ _DIRECT_ANSWER_RE = re.compile(
 )
 _WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]{2,}")
 
-_BLOCKING_FLAGS = {"code_leak", "direct_answer"}
+_BLOCKING_FLAGS = {"solution_leak", "direct_answer"}
 
 _SOCRATIC_FALLBACK = (
     "I'm going to keep us working through this together rather than hand over a "
@@ -96,7 +96,7 @@ class GuardrailAgent:
 
         ``allow_direct`` is set for the factual / definitional track: those
         answers *should* state facts directly, so the solution-leakage checks
-        (``code_leak``, ``direct_answer``) are disabled. Advisory checks
+        (``solution_leak``, ``direct_answer``) are disabled. Advisory checks
         (``too_long``, ``out_of_scope``) still apply.
         """
         original = draft or ""
@@ -107,7 +107,7 @@ class GuardrailAgent:
         if not allow_direct:
             code_lines = self._count_code_lines(original)
             if code_lines > self.max_code_lines:
-                flags.append("code_leak")
+                flags.append("solution_leak")
             if _DIRECT_ANSWER_RE.search(original):
                 flags.append("direct_answer")
         if len(_WORD_RE.findall(original)) > self.max_words:

@@ -58,7 +58,7 @@ export default function AuditPanel({ audit }: AuditPanelProps) {
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="w-20 font-semibold text-slate-500">Scaffolding</span>
             <Pill tone="blue">{scaffolding.stage}</Pill>
-            <Pill>hint depth {scaffolding.hint_depth}</Pill>
+            <Pill>hint depth {scaffolding.hint_sequence_depth}</Pill>
             {scaffolding.strategy && <Pill>{scaffolding.strategy}</Pill>}
           </div>
 

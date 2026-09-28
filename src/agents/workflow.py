@@ -162,6 +162,8 @@ class TutoringWorkflow:
             scaffolding={"stage": stage, "hint_sequence_depth": depth, "route": intent.route},
             guardrail=audit.to_dict(),
             retrieval={
+                "query": retrieval.query,
+                "module_id": retrieval.module_id,
                 "chunks": [c.to_dict() for c in retrieval.chunks],
                 "patterns": [p.to_dict() for p in retrieval.patterns],
             },
