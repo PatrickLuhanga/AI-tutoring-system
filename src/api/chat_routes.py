@@ -10,7 +10,7 @@ import logging
 import uuid
 
 from flask import Blueprint, current_app, jsonify, request
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ..agents import ChatRequest, TutoringWorkflow
@@ -19,7 +19,7 @@ from ..db import session_scope
 from ..history import append_message
 from ..inference import INFERENCE_UNAVAILABLE_MESSAGE
 from ..llm_router import LLMError
-from ..models import FEEDBACK_REASON_TAGS, HintFeedback, Module
+from ..models import FEEDBACK_REASON_TAGS, HintFeedback, Module, TelemetryLog
 from ..sessions import record_session_turn
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,21 @@ chat_bp = Blueprint("chat", __name__, url_prefix="/api")
 
 def _workflow() -> TutoringWorkflow:
     return current_app.extensions["tutoring_workflow"]
+
+
+def _discard_telemetry(log_id: int | None) -> None:
+    """Best-effort removal of a telemetry row whose transcript write failed.
+
+    Keeping telemetry only when its ``tutoring_sessions`` / ``session_messages``
+    rows exist prevents the orphan rows the admin dashboards cannot join.
+    """
+    if log_id is None:
+        return
+    try:
+        with session_scope() as session:
+            session.execute(delete(TelemetryLog).where(TelemetryLog.log_id == log_id))
+    except Exception as exc:  # noqa: BLE001 - never break the served reply
+        logger.error("Could not roll back telemetry row %s: %s", log_id, exc)
 
 
 def _clean_history(raw) -> list[dict[str, str]]:
@@ -64,16 +79,20 @@ def chat():
         return jsonify({"error": access.reason, "module_id": module_id}), status
 
     session_id = str(payload.get("session_id") or uuid.uuid4().hex)
-    # Refresh the relational session heartbeat: last activity + turn counter.
-    record_session_turn(
-        session_id=session_id,
-        student_id=identity.student_id,
-        email=identity.email,
-        module_id=module_id,
-    )
-    # Persist the student's turn so the sidebar can restore the conversation.
+    # Persist the student's turn as a *hard requirement* before any inference.
+    # ``append_message`` upserts the parent ``tutoring_sessions`` row and inserts
+    # the ``session_messages`` row in one transaction; if that fails we deliberately
+    # stop here rather than run the workflow, whose telemetry row would otherwise
+    # be orphaned with no session or message to join back to.
     user_message_id = uuid.uuid4().hex
     try:
+        # Refresh the relational session heartbeat: last activity + turn counter.
+        record_session_turn(
+            session_id=session_id,
+            student_id=identity.student_id,
+            email=identity.email,
+            module_id=module_id,
+        )
         append_message(
             session_id=session_id,
             role="user",
@@ -83,8 +102,17 @@ def chat():
             email=identity.email,
             message_id=user_message_id,
         )
-    except Exception as exc:  # noqa: BLE001 - history must never break a reply
-        logger.warning("Could not persist the student turn: %s", exc)
+    except Exception:  # noqa: BLE001 - fail before telemetry rather than orphan it
+        logger.exception("Could not persist the student turn for session %s", session_id)
+        return (
+            jsonify(
+                {
+                    "error": "The chat store is temporarily unavailable. "
+                    "Your message was not saved."
+                }
+            ),
+            503,
+        )
 
     request_obj = ChatRequest(
         message=message,
@@ -126,8 +154,13 @@ def chat():
                 "telemetry_log_id": result.telemetry_log_id,
             },
         )
-    except Exception as exc:  # noqa: BLE001 - history must never break a reply
-        logger.warning("Could not persist the tutor turn: %s", exc)
+    except Exception:  # noqa: BLE001 - never break the reply, but keep integrity
+        logger.exception("Could not persist the tutor turn for session %s", session_id)
+        # The reply reached the student but its transcript row did not, so drop
+        # the telemetry row rather than leave it orphaned from the message it
+        # describes (and stop advertising a log id that no longer exists).
+        _discard_telemetry(result.telemetry_log_id)
+        body["telemetry_log_id"] = None
     return jsonify(body), 200
 
 

@@ -463,9 +463,18 @@ class Retriever:
         clause = model.module_id == module_id if module_clause is None else module_clause
         idf = self._term_idf(session, model, terms, module_id, module_clause)
 
-        ts_rows = session.execute(
-            select(model, rank_cd.label("rank_cd")).where(clause, ts_match)
-        ).all()
+        # Bound the tsvector branch *before* materialising rows: on a large
+        # module a broad tsquery can match thousands of chunks, so keep only the
+        # best-ranked candidates in the same pool size the substring sweep uses.
+        ts_rows = (
+            session.execute(
+                select(model, rank_cd.label("rank_cd"))
+                .where(clause, ts_match)
+                .order_by(rank_cd.desc())
+                .limit(limit * 4)
+            )
+            .all()
+        )
 
         lexical = func.lower(self._lexical_text_column(model))
         substring_any = or_(*[lexical.like(f"%{term}%") for term in terms])

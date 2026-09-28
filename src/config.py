@@ -165,6 +165,9 @@ class Settings:
     # Database
     database_url: str
     db_schema: str
+    #: Per-statement wall-clock budget (ms) enforced by PostgreSQL via
+    #: ``statement_timeout`` so a runaway query cannot pin a worker.
+    db_statement_timeout_ms: int
 
     # Embeddings
     embedding_model_name: str
@@ -296,6 +299,7 @@ def _build_settings() -> Settings:
     return Settings(
         database_url=_database_url(),
         db_schema=_str("DB_SCHEMA", "public"),
+        db_statement_timeout_ms=_int("DB_STATEMENT_TIMEOUT_MS", 10000),
         embedding_model_name=_str("EMBEDDING_MODEL_NAME", "nomic-embed-text"),
         embedding_dim=_int("EMBEDDING_DIM", 768),
         embedding_device=_str("EMBEDDING_DEVICE", "cpu"),

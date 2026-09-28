@@ -15,8 +15,10 @@ A crash in the **Data Tier** (PostgreSQL / pgvector) must not take the API down.
 The two DB-dependent steps - counting prior turns and RAG retrieval - are wrapped
 so that a database outage degrades the reply (no history depth, no retrieved
 context) instead of raising. Telemetry writes were already best-effort. A crash
-in the **Inference Tier** (Ollama) is raised as an :class:`LLMError`, which the
-route converts into the clean JSON payload the UI expects.
+in the **Inference Tier** (Ollama) is raised as an :class:`LLMError`; before it
+propagates, the workflow still records a failed-turn telemetry row (carrying the
+:data:`INFERENCE_FAILURE_FLAG`) so abandoned sessions are observable, and the
+route then converts the error into the clean JSON payload the UI expects.
 """
 
 from __future__ import annotations
@@ -41,6 +43,10 @@ from .scaffolding import ScaffoldingLayer
 from .tutor_agent import TutorAgent
 
 logger = logging.getLogger(__name__)
+
+#: Failure flag recorded on a telemetry row when the inference tier fails a turn.
+#: Abandoned-session analytics select rows carrying this flag.
+INFERENCE_FAILURE_FLAG = "inference_error"
 
 
 @dataclass(slots=True)
@@ -115,25 +121,43 @@ class TutoringWorkflow:
         retrieval = self._retrieve(request, intent)
 
         # Inference Tier: may raise LLMError -> handled as a clean 502 upstream.
-        if direct:
-            # Factual / definitional: answer from RAG, bypass scaffolding.
-            draft: LLMResponse = self.tutor.answer_directly(
-                request.message,
-                module_name,
-                intent,
-                retrieval,
-                request.history,
+        draft: LLMResponse
+        try:
+            if direct:
+                # Factual / definitional: answer from RAG, bypass scaffolding.
+                draft = self.tutor.answer_directly(
+                    request.message,
+                    module_name,
+                    intent,
+                    retrieval,
+                    request.history,
+                )
+            else:
+                # Conceptual / debugging: Socratic scaffolding.
+                draft = self.tutor.draft(
+                    request.message,
+                    module_name,
+                    stage,
+                    intent,
+                    retrieval,
+                    request.history,
+                )
+        except LLMError:
+            # The turn is abandoned, but analytics still need to see it: record a
+            # failed-turn row (with the context gathered so far) before the route
+            # turns the error into a 502. The guardrail never ran, so this is not
+            # a content flag - only the failure-flag list is populated.
+            self._log_telemetry(
+                request=request,
+                message_id=message_id,
+                intent=intent,
+                stage=stage,
+                depth=depth,
+                retrieval=retrieval,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                failure_flags=[INFERENCE_FAILURE_FLAG],
             )
-        else:
-            # Conceptual / debugging: Socratic scaffolding.
-            draft = self.tutor.draft(
-                request.message,
-                module_name,
-                stage,
-                intent,
-                retrieval,
-                request.history,
-            )
+            raise
 
         audit = self.guardrail.audit(
             draft.text,
@@ -230,10 +254,28 @@ class TutoringWorkflow:
         intent: Intent,
         stage: str,
         depth: int,
-        audit: GuardrailResult,
         retrieval: RetrievalResult,
         latency_ms: int,
+        audit: Optional[GuardrailResult] = None,
+        failure_flags: Optional[list[str]] = None,
     ) -> Optional[int]:
+        """Best-effort telemetry write.
+
+        A completed turn passes ``audit``. A turn abandoned by an inference
+        failure passes ``failure_flags`` instead: the guardrail never ran, so
+        ``guardrail_flagged`` stays false and only the failure-flag list carries
+        the marker (``inference_error``) used to compute abandoned sessions.
+        """
+        if failure_flags is not None:
+            flagged = False
+            flags = list(failure_flags)
+        elif audit is not None:
+            flagged = audit.flagged
+            flags = list(audit.flags)
+        else:
+            flagged = False
+            flags = []
+
         try:
             module_id = request.module_id if self._module_exists(request.module_id) else None
             with session_scope() as session:
@@ -245,8 +287,8 @@ class TutoringWorkflow:
                     intent=intent.label,
                     scaffolding_stage=stage,
                     hint_sequence_depth=depth,
-                    guardrail_flagged=audit.flagged,
-                    guardrail_failure_flags=audit.flags,
+                    guardrail_flagged=flagged,
+                    guardrail_failure_flags=flags,
                     retrieved_curriculum_chunk_ids=retrieval.chunk_ids,
                     retrieved_code_pattern_ids=retrieval.pattern_ids,
                     embedding_model=settings.embedding_model_name,

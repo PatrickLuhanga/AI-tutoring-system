@@ -19,12 +19,22 @@ from .config import settings
 
 logger = logging.getLogger(__name__)
 
+# PostgreSQL-only: give every connection a server-side statement budget so a
+# runaway query is cancelled instead of holding a pool slot and a worker
+# forever. Other backends (e.g. SQLite in tests) don't understand ``options``.
+_connect_args: dict = {}
+if make_url(settings.database_url).drivername.startswith("postgres"):
+    _connect_args["options"] = (
+        f"-c statement_timeout={int(settings.db_statement_timeout_ms)}"
+    )
+
 engine: Engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
     future=True,
+    connect_args=_connect_args,
 )
 
 SessionLocal = sessionmaker(
