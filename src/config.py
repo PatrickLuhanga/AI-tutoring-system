@@ -263,6 +263,14 @@ class Settings:
     guardrail_min_context_overlap: float
     guardrail_action: str
 
+    # Scaffolding Engine - dynamic attempt evaluation (section 7.1). The
+    # thresholds are implementation/evaluation decisions, not syllabus rules.
+    scaffolding_advance_threshold: float
+    scaffolding_retreat_threshold: float
+    scaffolding_min_attempt_words: int
+    scaffolding_effort_full_words: int
+    scaffolding_context_char_budget: int
+
     # Module registry
     modules: Dict[str, Dict[str, str]] = field(default_factory=lambda: dict(MODULE_REGISTRY))
 
@@ -374,6 +382,11 @@ def _build_settings() -> Settings:
         guardrail_max_words=_int("GUARDRAIL_MAX_WORDS", 400),
         guardrail_min_context_overlap=_float("GUARDRAIL_MIN_CONTEXT_OVERLAP", 0.08),
         guardrail_action=_str("GUARDRAIL_ACTION", "block").lower(),
+        scaffolding_advance_threshold=_float("SCAFFOLDING_ADVANCE_THRESHOLD", 0.45),
+        scaffolding_retreat_threshold=_float("SCAFFOLDING_RETREAT_THRESHOLD", 0.18),
+        scaffolding_min_attempt_words=_int("SCAFFOLDING_MIN_ATTEMPT_WORDS", 3),
+        scaffolding_effort_full_words=_int("SCAFFOLDING_EFFORT_FULL_WORDS", 25),
+        scaffolding_context_char_budget=_int("SCAFFOLDING_CONTEXT_CHAR_BUDGET", 2000),
     )
 
 

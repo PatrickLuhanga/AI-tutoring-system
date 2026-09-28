@@ -12,9 +12,9 @@ The pipeline is a chain of single-responsibility agents, each in its own module
 Fault isolation
 ---------------
 A crash in the **Data Tier** (PostgreSQL / pgvector) must not take the API down.
-The two DB-dependent steps - counting prior turns and RAG retrieval - are wrapped
-so that a database outage degrades the reply (no history depth, no retrieved
-context) instead of raising. Telemetry writes were already best-effort. A crash
+The two DB-dependent steps - reading the session's prior hint depth and RAG
+retrieval - are wrapped so a database outage degrades the reply (no carried
+depth, no retrieved context) instead of raising. Telemetry writes were already best-effort. A crash
 in the **Inference Tier** (Ollama) is raised as an :class:`LLMError`; before it
 propagates, the workflow still records a failed-turn telemetry row (carrying the
 :data:`INFERENCE_FAILURE_FLAG`) so abandoned sessions are observable, and the
@@ -29,7 +29,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from ..config import settings
 from ..db import session_scope
@@ -109,16 +109,28 @@ class TutoringWorkflow:
         module_name = self._module_name(request.module_id)
         message_id = uuid.uuid4().hex
 
-        # Data Tier: degrade to zero history if PostgreSQL is unreachable.
-        prior_turns = self._count_session_turns(request.session_id)
+        # The depth carries forward from the session's previous turn (not the raw
+        # turn count); the attempt evaluation below decides how it moves.
+        # Data Tier: degrade to depth 0 if PostgreSQL is unreachable.
+        prior_depth = self._prior_hint_depth(request.session_id)
         intent = self.intent_agent.classify(request.message, module_name, request.history)
-        # ``determine_stage`` returns the neutral ``direct_answer`` stage for the
-        # factual track, so telemetry stays consistent without a Socratic stage.
-        stage, depth = self.scaffolding.determine_stage(prior_turns, intent, request.message)
         direct = intent.route == ROUTE_DIRECT
 
         # Data Tier: degrade to empty context if the vector store is unreachable.
         retrieval = self._retrieve(request, intent)
+
+        # Scaffolding: score the student's attempt (semantic quality + effort)
+        # and advance/hold/step back the stage. Direct turns skip the Socratic
+        # progression entirely, so they need no evaluation.
+        evaluation = None
+        if not direct:
+            evaluation = self.scaffolding.evaluate_attempt(
+                message=request.message,
+                history=request.history,
+                context_text=retrieval.context_text(),
+                intent=intent,
+            )
+        stage, depth = self.scaffolding.determine_stage(prior_depth, intent, evaluation)
 
         # Inference Tier: may raise LLMError -> handled as a clean 502 upstream.
         draft: LLMResponse
@@ -221,17 +233,22 @@ class TutoringWorkflow:
             return RetrievalResult(query=request.message, module_id=request.module_id)
 
     @staticmethod
-    def _count_session_turns(session_id: str) -> int:
-        """Return how many turns this session has had (0 if the DB is down)."""
+    def _prior_hint_depth(session_id: str) -> int:
+        """Return the depth recorded on this session's latest turn (0 if none).
+
+        The scaffolding progression is stateful across turns, but it is driven by
+        the previous *depth* rather than the number of turns, so the engine can
+        hold or step back when a student is not actually engaging.
+        """
         try:
             with session_scope() as session:
-                return int(
-                    session.execute(
-                        select(func.count())
-                        .select_from(TelemetryLog)
-                        .where(TelemetryLog.session_id == session_id)
-                    ).scalar_one()
-                )
+                depth = session.execute(
+                    select(TelemetryLog.hint_sequence_depth)
+                    .where(TelemetryLog.session_id == session_id)
+                    .order_by(TelemetryLog.log_id.desc())
+                    .limit(1)
+                ).scalar_one_or_none()
+            return int(depth) if depth is not None else 0
         except Exception as exc:  # noqa: BLE001 - Data Tier must not break the turn
             logger.warning("Could not read session history for %s: %s", session_id, exc)
             return 0

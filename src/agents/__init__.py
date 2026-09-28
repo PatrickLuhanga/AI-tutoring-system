@@ -15,11 +15,12 @@ client in :mod:`src.inference`.
 
 from .guardrail import GuardrailAgent, GuardrailResult
 from .intent_agent import Intent, IntentAgent
-from .scaffolding import ScaffoldingLayer
+from .scaffolding import AttemptEvaluation, ScaffoldingLayer
 from .tutor_agent import TutorAgent
 from .workflow import ChatRequest, TutoringWorkflow, WorkflowResult
 
 __all__ = [
+    "AttemptEvaluation",
     "ChatRequest",
     "GuardrailAgent",
     "GuardrailResult",
