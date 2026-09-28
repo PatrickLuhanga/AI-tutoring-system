@@ -2,11 +2,12 @@
 
 The final system delegates identity to DUT's Microsoft-backed login (section 3
 and 4.4): the app verifies the DUT4life identity and then applies its **own**
-role and module permissions. That SSO integration is not wired yet, so this
-module exposes a single seam - :func:`resolve_identity` - with a development
-implementation and a clearly-marked strict implementation. Everything above it
-(the chat/admin routes and the workflow) only depends on the :class:`Identity`
-object, so swapping in the real verifier later touches nothing else.
+role and module permissions. This module exposes a single seam -
+:func:`resolve_identity` - with a development implementation (trusted headers)
+and a strict implementation that cryptographically verifies a Microsoft Entra ID
+(Azure AD) access token against the tenant's JWKS. Everything above it (the
+chat/admin routes and the workflow) only depends on the :class:`Identity`
+object, so the two modes are interchangeable.
 """
 
 from __future__ import annotations
@@ -16,7 +17,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional
 
+import jwt
 from flask import Request
+from jwt import PyJWKClient
 from sqlalchemy import select
 
 from .config import settings
@@ -103,18 +106,78 @@ def _identity_from_headers(request: Request) -> tuple[Optional[str], Optional[st
     return body.get("student_email") or body.get("email"), body.get("role")
 
 
-def _verify_dut4life_token(token: str) -> Optional[str]:
-    """Placeholder for the DUT identity-provider integration (section 4.4).
+#: Cached Microsoft JWKS clients, keyed by tenant id. ``PyJWKClient`` caches the
+#: fetched signing keys internally, so one client per tenant per process is enough.
+_JWKS_CLIENTS: dict[str, PyJWKClient] = {}
 
-    The real implementation will validate the token against DUT's Microsoft
-    tenant and return the verified DUT4life email. Until then, strict mode
-    refuses to guess.
+
+def _jwks_client(tenant_id: str) -> PyJWKClient:
+    """Return (and memoise) the JWKS client for a Microsoft tenant."""
+    client = _JWKS_CLIENTS.get(tenant_id)
+    if client is None:
+        client = PyJWKClient(
+            f"https://login.microsoftonline.com/{tenant_id}/discovery/v2.0/keys"
+        )
+        _JWKS_CLIENTS[tenant_id] = client
+    return client
+
+
+def _bearer_token(request: Request) -> str:
+    """Extract the caller's token from ``Authorization: Bearer`` or the legacy header."""
+    header = request.headers.get("Authorization") or ""
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return (request.headers.get("X-DUT4life-Token") or "").strip()
+
+
+def _verify_dut4life_token(token: str) -> str:
+    """Validate a Microsoft Entra ID (Azure AD) access token and return its email.
+
+    The RS256 signature is checked against the tenant's published JWKS and the
+    ``aud``/``iss`` claims are pinned to this application (``AZURE_CLIENT_ID``)
+    and tenant (``AZURE_TENANT_ID``). Any invalid, expired or foreign token is
+    rejected with :class:`AuthError` (401).
     """
-    raise AuthError(
-        "DUT4life identity verification is not configured yet. Set AUTH_MODE=dev "
-        "for local development, or wire the identity provider in auth.py.",
-        status_code=501,
-    )
+    tenant_id = settings.azure_tenant_id.strip()
+    client_id = settings.azure_client_id.strip()
+    if not tenant_id or not client_id:
+        raise AuthError(
+            "Microsoft identity is not configured. Set AZURE_TENANT_ID and "
+            "AZURE_CLIENT_ID to use AUTH_MODE=strict.",
+            status_code=501,
+        )
+
+    try:
+        signing_key = _jwks_client(tenant_id).get_signing_key_from_jwt(token).key
+    except Exception as exc:  # noqa: BLE001 - JWKS lookup/parse failures are 401s
+        logger.warning("Could not resolve the Microsoft signing key: %s", exc)
+        raise AuthError(
+            "DUT4life signing key could not be resolved.", status_code=401
+        ) from exc
+
+    try:
+        claims = jwt.decode(
+            token,
+            signing_key,
+            algorithms=["RS256"],
+            audience=[client_id, f"api://{client_id}"],
+            issuer=[
+                f"https://login.microsoftonline.com/{tenant_id}/v2.0",
+                f"https://sts.windows.net/{tenant_id}/",
+            ],
+            options={"require": ["exp", "iat", "aud", "iss"]},
+        )
+    except jwt.PyJWTError as exc:
+        logger.warning("Microsoft token rejected: %s", exc)
+        raise AuthError(
+            "DUT4life token could not be verified.", status_code=401
+        ) from exc
+
+    for claim in ("preferred_username", "email", "upn", "unique_name"):
+        value = claims.get(claim)
+        if isinstance(value, str) and value.strip():
+            return value.strip().lower()
+    raise AuthError("DUT4life token carries no e-mail claim.", status_code=401)
 
 
 def resolve_identity(request: Request) -> Identity:
@@ -127,12 +190,15 @@ def resolve_identity(request: Request) -> Identity:
     mode = settings.auth_mode
 
     if mode == "strict":
-        token = request.headers.get("X-DUT4life-Token") or ""
+        # Strict mode never trusts the dev headers/body: identity is derived
+        # solely from a cryptographically verified Microsoft token.
+        token = _bearer_token(request)
         if not token:
-            raise AuthError("Missing DUT4life token.", status_code=401)
-        email = _verify_dut4life_token(token)  # raises 501 until wired
-        if not email:
-            raise AuthError("DUT4life identity could not be verified.", status_code=401)
+            raise AuthError(
+                "Missing DUT4life access token. Sign in with Microsoft.",
+                status_code=401,
+            )
+        email = _verify_dut4life_token(token)
         return _load_identity(email, requested_role=None, source="sso")
 
     # Development mode.

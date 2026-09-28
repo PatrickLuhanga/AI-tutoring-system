@@ -200,6 +200,10 @@ class Settings:
 
     # Authentication / authorization
     auth_mode: str
+    #: Microsoft Entra ID (Azure AD) tenant + application (client) id used to
+    #: verify DUT4life access tokens when ``auth_mode == "strict"``.
+    azure_tenant_id: str
+    azure_client_id: str
     admin_api_key: str
     #: Comma-separated allowlist of addresses auto-provisioned with the admin
     #: role on first login. The only hard-coded privilege bootstrap left.
@@ -320,6 +324,8 @@ def _build_settings() -> Settings:
         flask_port=_int("FLASK_PORT", 5000),
         flask_debug=_bool("FLASK_DEBUG", False),
         auth_mode=_str("AUTH_MODE", "dev").lower(),
+        azure_tenant_id=_str("AZURE_TENANT_ID", ""),
+        azure_client_id=_str("AZURE_CLIENT_ID", ""),
         admin_api_key=_str("ADMIN_API_KEY", "change-me-admin-key"),
         admin_emails=_str("ADMIN_EMAILS", "admin.system@dut4life.ac.za"),
         allowed_email_domain=_str("ALLOWED_EMAIL_DOMAIN", "dut4life.ac.za"),

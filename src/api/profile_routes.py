@@ -14,6 +14,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from ..auth import AuthError, require_admin, resolve_identity
+from ..config import settings
 from ..profiles import (
     ProfileError,
     get_profile,
@@ -39,7 +40,15 @@ def _require_student_id(request) -> tuple:
 def login():
     """Provision (first login) or resolve a profile for a DUT4life email."""
     payload = request.get_json(silent=True) or {}
-    email = str(payload.get("email") or "").strip()
+    if settings.auth_mode == "strict":
+        # Strict mode derives the address from a verified Microsoft token only;
+        # the request body can never assert an identity.
+        identity = resolve_identity(request)
+        email = (identity.email or "").strip()
+        if not identity.authenticated or not email:
+            raise AuthError("A valid DUT4life token is required.", status_code=401)
+    else:
+        email = str(payload.get("email") or "").strip()
     if not email:
         return jsonify({"error": "`email` is required."}), 400
     try:

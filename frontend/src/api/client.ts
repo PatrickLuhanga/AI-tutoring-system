@@ -44,19 +44,34 @@ const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY ?? 'change-me-admin-key'
 
 /**
  * Identity mirrored from the auth context so every request carries the
- * dev-mode `X-User-Email` / `X-User-Role` headers the gateway reads. The real
- * build swaps these for a DUT4life bearer token in `src/auth.py`.
+ * dev-mode `X-User-Email` / `X-User-Role` headers the gateway reads. When MSAL
+ * is configured, the verified Microsoft access token is added as well so a
+ * strict-mode gateway can cryptographically authenticate the caller.
  */
 let clientIdentity: AuthUser | null = null
+let accessToken: string | null = null
 
 export function setClientIdentity(user: AuthUser | null): void {
   clientIdentity = user
+}
+
+/**
+ * Store (or clear) the Microsoft Entra ID access token acquired by MSAL.
+ * Sent on every request as `Authorization: Bearer`; the dev headers are
+ * ignored by the gateway when `AUTH_MODE=strict`.
+ */
+export function setAccessToken(token: string | null): void {
+  accessToken = token
 }
 
 function identityHeaders(): Record<string, string> {
   const headers: Record<string, string> = {}
   if (clientIdentity?.email) headers['X-User-Email'] = clientIdentity.email
   if (clientIdentity?.role) headers['X-User-Role'] = clientIdentity.role
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`
+    headers['X-DUT4life-Token'] = accessToken
+  }
   return headers
 }
 

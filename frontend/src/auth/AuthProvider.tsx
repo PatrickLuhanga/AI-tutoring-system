@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { api, setClientIdentity } from '../api/client'
+import { api, setAccessToken, setClientIdentity } from '../api/client'
 import type { AuthUser, UserProfile } from '../types'
 import { AuthContext, type AuthContextValue } from './context'
+import { acquireMicrosoftTokenSilent, msalEnabled, signOutMicrosoft } from './msal'
 
 const STORAGE_KEY = 'ai-tutor.auth'
 
@@ -59,6 +60,12 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
     async function bootstrap() {
+      // Re-acquire a Microsoft token silently before any strict-mode call, so a
+      // page reload keeps the session without a second interactive login.
+      if (msalEnabled) {
+        const session = await acquireMicrosoftTokenSilent()
+        if (session && !cancelled) setAccessToken(session.accessToken)
+      }
       if (!readStored()) return
       try {
         const profile = await api.getProfile()
@@ -86,7 +93,11 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     return next
   }, [])
 
-  const logout = useCallback(() => setUser(null), [])
+  const logout = useCallback(() => {
+    setAccessToken(null)
+    void signOutMicrosoft()
+    setUser(null)
+  }, [])
 
   const value = useMemo<AuthContextValue>(
     () => ({ user, login, applyProfile, logout }),

@@ -9,8 +9,10 @@ import {
   Users,
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
+import { setAccessToken } from '../../api/client'
 import { useAuth } from '../../auth/context'
 import { DEMO_LOGINS, isInstitutionalEmail } from '../../auth/institutional'
+import { acquireMicrosoftToken, msalEnabled } from '../../auth/msal'
 import type { UserRole } from '../../types'
 
 const ROLE_ICON: Record<UserRole, ReactNode> = {
@@ -25,8 +27,8 @@ const ROLE_ICON: Record<UserRole, ReactNode> = {
  * Any valid `*@dut4life.ac.za` address signs in; the gateway provisions a
  * profile on first contact and the app routes the user to onboarding. The demo
  * shortcuts are just suggested addresses — they use the same dynamic flow, not
- * hard-coded profiles. The form is shaped for the future Microsoft `msal.js`
- * redirect.
+ * hard-coded profiles. When the Microsoft tenant is configured, the SSO button
+ * runs an MSAL popup flow and forwards the verified token to the gateway.
  */
 export default function LoginPage() {
   const { login } = useAuth()
@@ -42,6 +44,26 @@ export default function LoginPage() {
     setError(null)
     setPending(address)
     try {
+      await login(address)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setPending(null)
+    }
+  }
+
+  async function signInWithMicrosoft() {
+    setError(null)
+    setPending('microsoft')
+    try {
+      const session = await acquireMicrosoftToken()
+      setAccessToken(session.accessToken)
+      // Strict mode derives the address from the token; dev mode still needs one.
+      const address = session.email ?? email
+      if (!address) {
+        setError('Microsoft sign-in did not return an e-mail address.')
+        setPending(null)
+        return
+      }
       await login(address)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -84,11 +106,24 @@ export default function LoginPage() {
 
           <button
             type="button"
-            disabled
-            title="Microsoft SSO will be enabled once the DUT tenant is wired (AUTH_MODE=strict)."
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-400"
+            onClick={() => void signInWithMicrosoft()}
+            disabled={!msalEnabled || pending !== null}
+            title={
+              msalEnabled
+                ? 'Sign in with your DUT Microsoft account'
+                : 'Set VITE_AZURE_CLIENT_ID and VITE_AZURE_TENANT_ID to enable Microsoft SSO.'
+            }
+            className={`mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed ${
+              msalEnabled
+                ? 'text-slate-700 hover:border-blue-300 hover:bg-blue-50/40'
+                : 'text-slate-400'
+            }`}
           >
-            <MicrosoftLogo />
+            {pending === 'microsoft' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <MicrosoftLogo />
+            )}
             Sign in with Microsoft
           </button>
 
