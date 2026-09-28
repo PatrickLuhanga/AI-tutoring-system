@@ -67,6 +67,40 @@ def _ts_query(terms: list[str]) -> str:
     return " | ".join(f"'{term}'" for term in terms)
 
 
+#: Vocabulary bridge for course-administrative queries. Students ask about a
+#: "group project" and its "members"; the syllabus says "team structure",
+#: "roles", "SLR" and "assignment". Expanding the query before tokenising and
+#: embedding lets both the keyword and semantic branches see the syllabus
+#: vocabulary instead of only the colloquial phrasing.
+_QUERY_SYNONYMS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("group project", ("team", "structure", "slr", "assignment", "roles")),
+    ("group assignment", ("team", "assignment", "slr")),
+    ("group work", ("team", "collaboration")),
+    ("project group", ("team", "structure")),
+    ("members", ("roles", "team", "headcount")),
+    ("member", ("role", "team")),
+)
+
+
+def _expand_query(query: str) -> str:
+    """Append syllabus synonyms for administrative queries (no-op otherwise).
+
+    Expansion is additive and de-duplicated, so the original phrasing still
+    dominates the embedding while the syllabus vocabulary pulls the matching
+    documents into range. Queries with no trigger are returned untouched.
+    """
+    lowered = (query or "").lower()
+    additions: list[str] = []
+    for trigger, synonyms in _QUERY_SYNONYMS:
+        if trigger in lowered:
+            additions.extend(synonyms)
+    if not additions:
+        return query
+    existing = set(_TOKEN_RE.findall(lowered))
+    extra = [term for term in dict.fromkeys(additions) if term not in existing]
+    return f"{query} {' '.join(extra)}" if extra else query
+
+
 @dataclass(slots=True)
 class RetrievedChunk:
     chunk_id: int
@@ -205,11 +239,14 @@ class Retriever:
         if not query or not query.strip():
             return result
 
-        vector = get_embedder().encode_one(query)
+        # ``search_query`` carries the synonym expansion; ``result.query`` keeps
+        # the student's original wording for the audit trail.
+        search_query = _expand_query(query)
+        vector = get_embedder().encode_one(search_query)
         with session_scope() as session:
-            result.chunks = self._search_curriculum(session, query, vector, module_id)
+            result.chunks = self._search_curriculum(session, search_query, vector, module_id)
             if include_patterns:
-                result.patterns = self._search_patterns(session, query, vector, module_id)
+                result.patterns = self._search_patterns(session, search_query, vector, module_id)
 
         logger.info(
             "Retrieved %d chunks and %d patterns for module %s",
@@ -226,7 +263,11 @@ class Retriever:
         if not settings.retrieval_hybrid_enabled:
             return self._semantic_chunks_only(session, vector, module_id, self.top_k)
 
-        pool = max(self.top_k * settings.retrieval_hybrid_pool_factor, settings.retrieval_hybrid_min_pool)
+        pool = max(
+            self.top_k * settings.retrieval_hybrid_pool_factor,
+            settings.retrieval_hybrid_min_pool,
+            settings.retrieval_candidate_pool,
+        )
         try:
             terms = self._discriminative_terms(session, CurriculumChunk, query, module_id)
         except Exception as exc:  # noqa: BLE001 - keyword branch must not kill the turn
@@ -236,7 +277,18 @@ class Retriever:
         min_similarity = (
             settings.retrieval_min_similarity if terms else settings.retrieval_strict_similarity
         )
-        semantic = self._vector_hits(session, CurriculumChunk, vector, module_id, pool, min_similarity)
+        # Fetch a wide candidate pool against a relaxed floor so mid-similarity
+        # (0.55-0.60) chunks reach RRF fusion instead of being dropped up front;
+        # the final ranking is still cut to ``top_k``. Without lexical anchors
+        # (``terms`` empty) the strict gate is kept.
+        candidate_floor = (
+            min(min_similarity, settings.retrieval_candidate_min_similarity)
+            if terms
+            else min_similarity
+        )
+        semantic = self._vector_hits(
+            session, CurriculumChunk, vector, module_id, pool, candidate_floor
+        )
 
         keyword: list[_FusedHit] = []
         if terms:
@@ -298,7 +350,11 @@ class Retriever:
             rows = self._semantic_patterns_only(session, vector, module_clause, self.code_top_k)
             return rows
 
-        pool = max(self.code_top_k * settings.retrieval_hybrid_pool_factor, settings.retrieval_hybrid_min_pool)
+        pool = max(
+            self.code_top_k * settings.retrieval_hybrid_pool_factor,
+            settings.retrieval_hybrid_min_pool,
+            settings.retrieval_candidate_pool,
+        )
         try:
             terms = self._discriminative_terms(session, CodeRepairPattern, query, module_id, module_clause)
         except Exception as exc:  # noqa: BLE001

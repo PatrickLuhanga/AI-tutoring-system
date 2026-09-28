@@ -246,6 +246,13 @@ class Settings:
     retrieval_max_df_ratio: float
     retrieval_hybrid_pool_factor: int
     retrieval_hybrid_min_pool: int
+    #: Candidate pool fetched from each branch before RRF fusion (the final
+    #: ranking is still cut to ``retrieval_top_k``).
+    retrieval_candidate_pool: int
+    #: Relaxed similarity floor used only for the candidate fetch, so
+    #: mid-similarity (0.55-0.60) chunks reach fusion instead of being dropped
+    #: by the stricter ``retrieval_min_similarity`` gate up front.
+    retrieval_candidate_min_similarity: float
     retrieval_keyword_weight: float
     retrieval_vector_weight: float
 
@@ -351,11 +358,15 @@ def _build_settings() -> Settings:
         retrieval_code_top_k=_int("RETRIEVAL_CODE_TOP_K", 3),
         retrieval_hybrid_enabled=_bool("RETRIEVAL_HYBRID_ENABLED", True),
         retrieval_rrf_k=_int("RETRIEVAL_RRF_K", 60),
-        retrieval_min_similarity=_float("RETRIEVAL_MIN_SIMILARITY", 0.60),
+        retrieval_min_similarity=_float("RETRIEVAL_MIN_SIMILARITY", 0.55),
         retrieval_strict_similarity=_float("RETRIEVAL_STRICT_SIMILARITY", 0.78),
-        retrieval_max_df_ratio=_float("RETRIEVAL_MAX_DF_RATIO", 0.3),
+        retrieval_max_df_ratio=_float("RETRIEVAL_MAX_DF_RATIO", 0.45),
         retrieval_hybrid_pool_factor=_int("RETRIEVAL_HYBRID_POOL_FACTOR", 6),
         retrieval_hybrid_min_pool=_int("RETRIEVAL_HYBRID_MIN_POOL", 20),
+        retrieval_candidate_pool=_int("RETRIEVAL_CANDIDATE_POOL", 40),
+        retrieval_candidate_min_similarity=_float(
+            "RETRIEVAL_CANDIDATE_MIN_SIMILARITY", 0.45
+        ),
         retrieval_keyword_weight=_float("RETRIEVAL_KEYWORD_WEIGHT", 1.0),
         retrieval_vector_weight=_float("RETRIEVAL_VECTOR_WEIGHT", 1.0),
         guardrail_enabled=_bool("GUARDRAIL_ENABLED", True),

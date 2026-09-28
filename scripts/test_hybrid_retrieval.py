@@ -42,6 +42,19 @@ REGRESSION = [
         "min_matches": 3,
     },
     {
+        # Student phrasing ("group project / members") vs syllabus vocabulary
+        # ("team structure / roles / SLR"); relies on the query synonym
+        # expansion in src/retriever.py to surface the Team Formation doc.
+        "group": "REGRESSION",
+        "module": "RESK301",
+        "query": (
+            "I have a group project for this module, how many members do i need "
+            "for this group project?"
+        ),
+        "expect_ids": {8050, 8051, 8052, 8053},
+        "min_matches": 2,
+    },
+    {
         "group": "REGRESSION",
         "module": "RESK301",
         "query": "Describe the stages of the research process",
