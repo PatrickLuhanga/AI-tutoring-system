@@ -11,8 +11,16 @@ workflow) are constructed once per app and stored in ``app.extensions``.
 
 Routes
 ------
+``POST /api/auth/login``            provision/resolve a DUT4life profile
+``GET/PUT /api/profile``            read/save name + enrolled modules
+``GET/DELETE /api/sessions``        chat-history list / load / delete
 ``POST /api/chat``                  student question -> audited Socratic hint
 ``POST /api/feedback``              thumbs up/down -> telemetry
+``POST /api/session``               record a student login + module-chat open
+``POST /api/admin/grant-tutor``     grant tutor privileges (dual role)
+``GET  /api/tutor/analytics``       module-scoped analytics for a tutor
+``GET  /api/admin/analytics``       system-wide telemetry aggregates
+``GET  /api/admin/overview``        users, roles and guardrail flag totals
 ``GET  /api/modules``               modules available to the client dropdown
 ``GET  /api/health``                liveness / readiness probe
 ``GET/POST /api/admin/llm-config``  switch Cloud <-> Local LLM, rotate API key
@@ -27,7 +35,7 @@ import sys
 from flask import Flask, jsonify, request
 
 from .agents import TutoringWorkflow
-from .api import admin_bp, chat_bp
+from .api import admin_bp, analytics_bp, chat_bp, history_bp, profile_bp
 from .auth import AuthError
 from .config import settings
 from .db import check_connection
@@ -150,6 +158,7 @@ def _register_meta_routes(app: Flask) -> None:
                             "module_id": module["module_id"],
                             "module_code": module.get("module_code"),
                             "module_name": module["module_name"],
+                            "course_code": module.get("course_code"),
                             "language": module.get("language"),
                         }
                         for module in settings.modules.values()
@@ -192,6 +201,9 @@ def create_app() -> Flask:
 
     app.register_blueprint(chat_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(analytics_bp)
+    app.register_blueprint(profile_bp)
+    app.register_blueprint(history_bp)
     _register_meta_routes(app)
     _register_error_handlers(app)
     _configure_cors(app)

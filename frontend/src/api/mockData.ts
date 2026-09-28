@@ -1,18 +1,20 @@
 /**
- * Mock payloads for the frontend-first prototype.
+ * Static mock payloads for the frontend-first prototype.
  *
- * Every object here is shaped exactly like the Flask API responses so that
- * `src/api/client.ts` can be flipped from `MOCK` to real HTTP without any
- * component changes.
+ * Student chat history and profiles are no longer hard-coded here — they live
+ * in `src/api/mockBackend.ts` (localStorage-backed) so the sidebar behaves like
+ * the real API. This file only owns the reference/analytics payloads.
  */
 
 import type {
-  ChatMessage,
-  ChatResponse,
   LLMConfig,
   Module,
   OllamaModelsResponse,
+  SessionOpenPayload,
+  SessionOpenResponse,
+  StruggleTopic,
   TelemetryAnalytics,
+  TutorAnalytics,
 } from '../types'
 
 export const MOCK = true
@@ -48,216 +50,6 @@ export const MODULES: Module[] = [
     language: 'N/A',
   },
 ]
-
-// ---------------------------------------------------------------------------
-// Mock transcript — a student debugging an IndexOutOfRange-style error.
-// ---------------------------------------------------------------------------
-
-const C_SHARP_HINT = `Let's slow down and look at **how you are indexing**, not at the fix itself.
-
-When you write \`numbers[i]\`, C# requires \`i\` to satisfy \`0 <= i < numbers.Length\`. The
-exception tells you that assumption broke somewhere, so the real question is: *which value of
-\`i\` walked past the end of the array?*
-
-Here is the smallest version of your loop so we can reason about it together:
-
-\`\`\`csharp
-int[] numbers = { 4, 8, 15, 16 };
-
-// Where does this loop read past the last valid index?
-for (int i = 0; i <= numbers.Length; i++)
-{
-    Console.WriteLine(numbers[i]);
-}
-\`\`\`
-
-### Questions to work through
-1. What is \`numbers.Length\` for this array?
-2. What is the **last** valid index — and how is it related to \`Length\`?
-3. Which iteration of the loop first breaks that rule?
-
-Change *one* boundary condition in your own code, run it again, and paste the output (or the
-new exception). I'll stay on the loop boundary with you until it compiles and prints every
-element exactly once.`
-
-const C_SHARP_FOLLOWUP = `Good — you spotted that \`i <= numbers.Length\` lets \`i\` reach \`Length\`, which is one
-past the last element. That is the classic off-by-one.
-
-Before you commit the fix, predict the output for this array so you can prove the boundary is
-right in your head:
-
-\`\`\`csharp
-int[] numbers = { 2, 4, 6 };
-\`\`\`
-
-How many lines do you expect to print, and what are they? If that matches what your loop
-prints, the bug is genuinely gone — not just hidden.`
-
-export const INITIAL_MESSAGES: ChatMessage[] = [
-  {
-    message_id: 'seed-msg-0001',
-    role: 'user',
-    content:
-      "I keep getting `System.IndexOutOfRangeException: Index was outside the bounds of the array` when I loop through my array in C#. I've been staring at it for an hour. Can you just show me the correct code?",
-    created_at: '2026-09-24T09:12:00Z',
-  },
-  {
-    message_id: 'seed-msg-0002',
-    role: 'assistant',
-    content: C_SHARP_HINT,
-    created_at: '2026-09-24T09:12:04Z',
-    audit: {
-      intent: { label: 'debugging', confidence: 0.91, source: 'heuristic' },
-      scaffolding: { stage: 'guiding', hint_depth: 1, strategy: 'questioning' },
-      guardrail: { flagged: false, flags: [], action: 'pass' },
-      retrieval: {
-        query: 'IndexOutOfRangeException loop array C# boundary',
-        module_id: 'PBDV301',
-        chunks: [
-          {
-            chunk_id: 412,
-            module_id: 'PBDV301',
-            source_name: 'Arrays & Collections',
-            section_title: 'Bounds checking and off-by-one loops',
-            distance: 0.1873,
-            preview:
-              'An array of length n exposes valid indices 0 through n-1. Iterating with i <= n reads one element past the end...',
-          },
-        ],
-        patterns: [
-          {
-            pattern_id: 88,
-            module_id: null,
-            error_title: 'Loop boundary reads one past the final element',
-            exception_thrown: 'System.IndexOutOfRangeException',
-            distance: 0.1542,
-            hint: 'Ask the student which iteration first violates 0 <= i < Length rather than correcting the operator.',
-          },
-        ],
-      },
-      llm: { provider: 'local', model: 'qwen3:4b', backend: 'ollama', latency_ms: 1840 },
-      telemetry_log_id: 90211,
-    },
-  },
-  {
-    message_id: 'seed-msg-0003',
-    role: 'user',
-    content: 'Oh. `i <= numbers.Length` should be `i < numbers.Length`, right?',
-    created_at: '2026-09-24T09:14:31Z',
-  },
-  {
-    message_id: 'seed-msg-0004',
-    role: 'assistant',
-    content: C_SHARP_FOLLOWUP,
-    created_at: '2026-09-24T09:14:35Z',
-    feedback: { rating: 1, submitted: true },
-    audit: {
-      intent: { label: 'debugging', confidence: 0.95, source: 'heuristic' },
-      scaffolding: { stage: 'reinforcing', hint_depth: 2, strategy: 'questioning' },
-      guardrail: { flagged: false, flags: [], action: 'pass' },
-      retrieval: {
-        query: 'off by one loop boundary verify prediction C#',
-        module_id: 'PBDV301',
-        chunks: [],
-        patterns: [],
-      },
-      llm: { provider: 'local', model: 'qwen3:4b', backend: 'ollama', latency_ms: 1210 },
-      telemetry_log_id: 90218,
-    },
-  },
-]
-
-/** Canned replies keyed by rough intent, cycled when the student sends a message. */
-const CANNED_REPLIES: string[] = [
-  `That's a useful observation — let's test it rather than trust it.
-
-> What output do you *expect* from the code as it stands, and what does it actually print?
-
-Write down both, then run it. The gap between them is the clue we care about.
-
-\`\`\`csharp
-for (int i = 0; i < numbers.Length; i++)
-{
-    Console.WriteLine($"[{i}] = {numbers[i]}");
-}
-\`\`\`
-
-If the run matches your prediction, tell me the predicted output so I can confirm your mental
-model is now correct.`,
-
-  `You're close. Before we move on, try to explain *why* the boundary rule exists, not just what
-it is.
-
-1. If \`Length\` is \`n\`, how many elements can you address?
-2. Why would starting at \`1\` also be a bug?
-
-Answer those in your own words and I'll verify your reasoning rather than your syntax.`,
-]
-
-let cannedCursor = 0
-
-/** Build a mock `ChatResponse` for a student turn. */
-export function mockChatResponse(message: string, sessionId: string, moduleId: string): ChatResponse {
-  const reply = CANNED_REPLIES[cannedCursor % CANNED_REPLIES.length]
-  cannedCursor += 1
-
-  const bypass =
-    /\b(give me (the )?(answer|code|solution)|just give me|final code|solve it for me)\b/i.test(
-      message,
-    )
-
-  return {
-    session_id: sessionId,
-    message_id: `mock-${Date.now().toString(36)}-${cannedCursor}`,
-    reply: bypass
-      ? `I can't hand over a finished solution — that would skip the part where you learn.
-
-Let's meet in the middle: describe the **exact error message** and the line it points to, and
-I'll ask you one guiding question at a time. What does your debugger say the value of the index
-is right before the failure?`
-      : reply,
-    intent: {
-      label: bypass ? 'bypass' : 'debugging',
-      confidence: bypass ? 0.88 : 0.9,
-      source: 'heuristic',
-    },
-    scaffolding: {
-      stage: 'guiding',
-      hint_depth: 1,
-      strategy: 'questioning',
-    },
-    guardrail: {
-      flagged: bypass,
-      flags: bypass ? ['bypass_attempt'] : [],
-      action: bypass ? 'blocked' : 'pass',
-    },
-    retrieval: {
-      query: message.slice(0, 120),
-      module_id: moduleId,
-      chunks: [
-        {
-          chunk_id: 417,
-          module_id: moduleId,
-          source_name: 'Debugging Fundamentals',
-          section_title: 'Reading a stack trace as evidence',
-          distance: 0.221,
-          preview:
-            'Start from the innermost frame and work outward: the exception type names the category of failure, the message names the value, the frame names the line...',
-        },
-      ],
-      patterns: [],
-    },
-    llm: {
-      provider: 'local',
-      model: 'qwen3:4b',
-      backend: 'ollama',
-      latency_ms: 1520,
-    },
-    telemetry_log_id: Math.floor(Math.random() * 100000),
-    identity: { student_id: 1042, email: 'student@example.edu', role: 'student' },
-    module_access: { allowed: true, exists: true },
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Dynamic LLM Router mocks
@@ -347,3 +139,82 @@ export const MOCK_ANALYTICS: TelemetryAnalytics = {
   ],
   average_latency_ms: 1633,
 }
+
+// ---------------------------------------------------------------------------
+// Session tracking (login + module-chat activity)
+// ---------------------------------------------------------------------------
+
+/** Mirrors the row `POST /api/session` upserts into `tutoring_sessions`. */
+export function mockSessionOpen(payload: SessionOpenPayload): SessionOpenResponse {
+  const now = new Date().toISOString()
+  return {
+    session_id: payload.session_id,
+    student_id: 1042,
+    module_id: payload.module_id,
+    started_at: now,
+    last_activity_at: now,
+    turn_count: 0,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tutor dashboard — scoped analytics
+// ---------------------------------------------------------------------------
+
+/** Every struggle topic, keyed by module, so a scope filter can slice it. */
+const MOCK_STRUGGLE_TOPICS: StruggleTopic[] = [
+  { module_id: 'IPRT301', topic: 'NullPointerException handling', struggles: 42, students: 18 },
+  { module_id: 'IPRT301', topic: 'JDBC connection pooling', struggles: 27, students: 11 },
+  { module_id: 'IPRT301', topic: 'Off-by-one loop boundaries', struggles: 23, students: 15 },
+  { module_id: 'IPRT301', topic: 'Servlet request lifecycle', struggles: 14, students: 9 },
+  { module_id: 'PBDV301', topic: 'Mutable default arguments', struggles: 31, students: 14 },
+  { module_id: 'PBDV301', topic: 'List vs. generator iteration', struggles: 22, students: 12 },
+  { module_id: 'PBDV301', topic: 'Exception scope in try/except', struggles: 19, students: 10 },
+  { module_id: 'RESK301', topic: 'Referencing academic sources', struggles: 12, students: 8 },
+  { module_id: 'SPRI301', topic: 'Ethical case analysis', struggles: 9, students: 6 },
+]
+
+const MOCK_REPEAT_HELP = [
+  { student_id: 1042, email: 'student@dut4life.ac.za', module_id: 'IPRT301', sessions: 4, turns: 17, thumbs_down: 3 },
+  { student_id: 1055, email: '22000123@dut4life.ac.za', module_id: 'IPRT301', sessions: 3, turns: 12, thumbs_down: 2 },
+  { student_id: 1078, email: '22000488@dut4life.ac.za', module_id: 'PBDV301', sessions: 5, turns: 21, thumbs_down: 4 },
+  { student_id: 1090, email: '22000601@dut4life.ac.za', module_id: 'PBDV301', sessions: 3, turns: 11, thumbs_down: 2 },
+  { student_id: 1112, email: '22000730@dut4life.ac.za', module_id: 'RESK301', sessions: 2, turns: 8, thumbs_down: 1 },
+]
+
+/**
+ * Build the tutor analytics payload, filtered to `modules` when supplied.
+ * An empty scope (admin viewer) returns every module.
+ */
+export function mockTutorAnalytics(modules: string[] = []): TutorAnalytics {
+  const inScope = (moduleId: string) => modules.length === 0 || modules.includes(moduleId)
+  const scope = MODULES.filter((m) => inScope(m.module_id)).map((m) => ({
+    module_id: m.module_id,
+    module_name: m.module_name,
+  }))
+  const struggle = MOCK_STRUGGLE_TOPICS.filter((t) => inScope(t.module_id)).sort(
+    (a, b) => b.struggles - a.struggles,
+  )
+  const repeat = MOCK_REPEAT_HELP.filter((r) => inScope(r.module_id))
+
+  return {
+    scope,
+    window_minutes: 60,
+    active_students: modules.length === 2 ? 37 : 94,
+    total_sessions: modules.length === 2 ? 68 : 176,
+    total_queries: modules.length === 2 ? 289 : 741,
+    avg_hint_depth: modules.length === 2 ? 2.4 : 2.1,
+    guardrail_flags: modules.length === 2 ? 16 : 43,
+    struggle_topics: struggle,
+    repeat_help_students: repeat,
+    generated_at: new Date().toISOString(),
+  }
+}
+
+/** Guardrail flag totals shown on the admin dashboard (mock mode). */
+export const MOCK_GUARDRAIL_FLAGS = [
+  { flag: 'solution_leak', count: 128 },
+  { flag: 'out_of_scope', count: 74 },
+  { flag: 'too_long', count: 51 },
+  { flag: 'bypass_attempt', count: 33 },
+]

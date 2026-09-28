@@ -1,0 +1,687 @@
+{
+  "version": 1,
+  "intent_labels": [
+    "conceptual",
+    "debugging",
+    "procedural",
+    "bypass_attempt"
+  ],
+  "generator": "scripts/generate_few_shots.py",
+  "modules": {
+    "IPRT301": {
+      "module_id": "IPRT301",
+      "module_name": "Internet Programming",
+      "module_code": "IPRT301",
+      "course_code": "DIP3",
+      "language": "Java",
+      "kind": "code",
+      "allowed_intents": [
+        "conceptual",
+        "debugging",
+        "procedural",
+        "bypass_attempt"
+      ],
+      "themes": [
+        "abstract classes",
+        "XML parsing",
+        "client-server implementation",
+        "design patterns",
+        "distributed applications",
+        "infinite loops",
+        "Java programming",
+        "XML handling",
+        "Eclipse setup",
+        "Debugging",
+        "Server-client communication",
+        "VAT calculation",
+        "Internet Programming",
+        "object-oriented programming",
+        "XML",
+        "distributed systems",
+        "Eclipse",
+        "Procedural tasks",
+        "Conceptual understanding",
+        "Java",
+        "Intersystem Communication",
+        "XML and DTD",
+        "Eclipse tool usage"
+      ],
+      "sampled_chunk_ids": [
+        4,
+        3136,
+        3719,
+        3068,
+        3341,
+        15,
+        3707,
+        3580,
+        3315,
+        3048,
+        2249,
+        3096
+      ],
+      "generated_at": "2026-09-27T19:32:42+00:00",
+      "model": "deepseek-r1:14b",
+      "examples": [
+        {
+          "raw_student_input": "yo why does my abstract class keep givin me errors when i try to create an instance?",
+          "true_intent": "debugging",
+          "optimized_search_query": "abstract class instance creation error Java",
+          "reasoning_hint": "The student is encountering an error when trying to instantiate an abstract class, which is a common debugging issue."
+        },
+        {
+          "raw_student_input": "the xml stuff is so confusing, how do i even start parse it?",
+          "true_intent": "conceptual",
+          "optimized_search_query": "XML parsing in Java",
+          "reasoning_hint": "The student is seeking a conceptual understanding of how to parse XML in Java."
+        },
+        {
+          "raw_student_input": "plz send me the code for the client server thing we did in class",
+          "true_intent": "bypass_attempt",
+          "optimized_search_query": "Java client-server application implementation",
+          "reasoning_hint": "The student is requesting the complete code for a client-server application, indicating a bypass attempt."
+        },
+        {
+          "raw_student_input": "wat is the deal with design patterns in java?",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Java design patterns",
+          "reasoning_hint": "The student is asking for an explanation of design patterns in Java, seeking conceptual understanding."
+        },
+        {
+          "raw_student_input": "my client server app is sendin msgs but not gettin any back, help",
+          "true_intent": "debugging",
+          "optimized_search_query": "Java client-server messaging issues",
+          "reasoning_hint": "The student is experiencing a problem with bidirectional communication in their client-server application."
+        },
+        {
+          "raw_student_input": "how do i even begin to code a distributed app? it's too much",
+          "true_intent": "procedural",
+          "optimized_search_query": "Steps to implement distributed applications in Java",
+          "reasoning_hint": "The student is seeking a procedural approach to starting the implementation of distributed applications."
+        },
+        {
+          "raw_student_input": "yo why does my for loop keep printin forever???",
+          "true_intent": "debugging",
+          "optimized_search_query": "Java infinite loop for loop debugging",
+          "reasoning_hint": "Identifies a common debugging issue with loops."
+        },
+        {
+          "raw_student_input": "the xml thingy wont load, idk wat im doin",
+          "true_intent": "debugging",
+          "optimized_search_query": "Java XML DTD file not loading error",
+          "reasoning_hint": "Addresses XML file loading issues in Java."
+        },
+        {
+          "raw_student_input": "how do i even start with this java project in eclipse plz?",
+          "true_intent": "procedural",
+          "optimized_search_query": "Setting up a Java project in Eclipse step-by-step",
+          "reasoning_hint": "Asks for step-by-step guidance on project setup."
+        },
+        {
+          "raw_student_input": "Exception in thread main java.lang.NullPointerException at ServerTester.main(ServerTester.java:12) help??",
+          "true_intent": "debugging",
+          "optimized_search_query": "Java NullPointerException in ServerTester main method",
+          "reasoning_hint": "Requests help with a specific runtime error."
+        },
+        {
+          "raw_student_input": "just gimme the code for the server client thing plz im outa time",
+          "true_intent": "bypass_attempt",
+          "optimized_search_query": "Java server-client communication code example",
+          "reasoning_hint": "Demands a complete solution for server-client communication."
+        },
+        {
+          "raw_student_input": "vat calculation not working in my code wat do i do",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Java VAT calculation implementation in programming",
+          "reasoning_hint": "Asks for conceptual understanding of VAT calculation."
+        },
+        {
+          "raw_student_input": "how to make a server client thing in java plz",
+          "true_intent": "procedural",
+          "optimized_search_query": "Java server-client communication implementation",
+          "reasoning_hint": "Student is asking for step-by-step guidance on implementing server-client communication."
+        },
+        {
+          "raw_student_input": "nvm found it lol",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Java abstract class inheritance",
+          "reasoning_hint": "Student is discussing a concept related to abstract classes in Java."
+        },
+        {
+          "raw_student_input": "yo why is my server tester code givin me a nullpointerexception? i initialed the variables but it still crashes.",
+          "true_intent": "debugging",
+          "optimized_search_query": "Java NullPointerException in ServerTester.java",
+          "reasoning_hint": "The student is encountering a runtime error and needs help identifying and fixing the issue."
+        },
+        {
+          "raw_student_input": "how do i calculate vat and total price using the client tester? i'm confused about the remote method calls.",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Java remote method calls VAT calculation",
+          "reasoning_hint": "The student is seeking an explanation of how to use remote methods for financial calculations."
+        },
+        {
+          "raw_student_input": "the xml dtd thing is confusing. how do i create the structure for the shop items?",
+          "true_intent": "procedural",
+          "optimized_search_query": "Java XML DTD structure creation",
+          "reasoning_hint": "The student needs step-by-step guidance on creating XML structures with DTDs."
+        },
+        {
+          "raw_student_input": "what's the deal with executors in java? i need to run tasks in a pool but idk how to manage the threads.",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Java ExecutorService thread pool management",
+          "reasoning_hint": "The student is seeking an understanding of how thread pools work in Java."
+        },
+        {
+          "raw_student_input": "how do i even start with design patterns? i'm lost",
+          "true_intent": "procedural",
+          "optimized_search_query": "Introduction to design patterns in Java programming",
+          "reasoning_hint": "The student is asking for a step-by-step approach to understanding design patterns."
+        },
+        {
+          "raw_student_input": "how do i even start the xml dtd stuff in eclipse plz?",
+          "true_intent": "procedural",
+          "optimized_search_query": "Eclipse XML DTD creation step-by-step guide",
+          "reasoning_hint": "The student is seeking clear, step-by-step instructions to complete a task in Eclipse."
+        }
+      ]
+    },
+    "PBDV301": {
+      "module_id": "PBDV301",
+      "module_name": "Platform Based Development",
+      "module_code": "PBDV301",
+      "course_code": "DIP3",
+      "language": "Python",
+      "kind": "code",
+      "allowed_intents": [
+        "conceptual",
+        "debugging",
+        "procedural",
+        "bypass_attempt"
+      ],
+      "themes": [
+        "Game Platforms",
+        "Industrial Platforms",
+        "Web Platforms",
+        "Mobile Platforms",
+        "General",
+        "General Module Resources",
+        "Platform-Based Development",
+        "Python"
+      ],
+      "sampled_chunk_ids": [
+        8007,
+        8044,
+        4251,
+        7174,
+        3724,
+        3744,
+        5139,
+        8023,
+        8026,
+        4232,
+        6580,
+        3725
+      ],
+      "generated_at": "2026-09-27T19:55:41+00:00",
+      "model": "deepseek-r1:14b",
+      "examples": [
+        {
+          "raw_student_input": "yo why does my game app keep crashing idk what i did wrong",
+          "true_intent": "debugging",
+          "optimized_search_query": "game application crash troubleshooting",
+          "reasoning_hint": "Student is encountering a runtime error in their game application."
+        },
+        {
+          "raw_student_input": "the flask extensions not workin for me plz help",
+          "true_intent": "debugging",
+          "optimized_search_query": "Flask extensions installation and configuration issues",
+          "reasoning_hint": "Student is facing issues with Flask extensions not working."
+        },
+        {
+          "raw_student_input": "how do i even start with web platform stuff",
+          "true_intent": "procedural",
+          "optimized_search_query": "getting started with web platform development",
+          "reasoning_hint": "Student is seeking guidance on how to begin web platform development."
+        },
+        {
+          "raw_student_input": "wat is the diff between industrial and game platforms",
+          "true_intent": "conceptual",
+          "optimized_search_query": "difference between industrial platforms and game platforms",
+          "reasoning_hint": "Student wants to understand the distinction between industrial and game platforms."
+        },
+        {
+          "raw_student_input": "just gimme the code for the server client thing plz im outa time",
+          "true_intent": "bypass_attempt",
+          "optimized_search_query": "server-client code implementation in Python",
+          "reasoning_hint": "Student is requesting a complete solution for a server-client setup."
+        },
+        {
+          "raw_student_input": "the xml file is not loading in my android app wat should i do",
+          "true_intent": "debugging",
+          "optimized_search_query": "Android XML file loading issues and solutions",
+          "reasoning_hint": "Student is facing an issue with XML file loading in their Android application."
+        },
+        {
+          "raw_student_input": "how do u make a game loop in unity",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Unity game loop implementation for game development",
+          "reasoning_hint": "Student is seeking to understand the concept of game loops in Unity."
+        },
+        {
+          "raw_student_input": "error: cannot resolve symbol 'dsl'",
+          "true_intent": "debugging",
+          "optimized_search_query": "DSL error in programming implementation",
+          "reasoning_hint": "Student is encountering a technical issue with DSL implementation."
+        },
+        {
+          "raw_student_input": "how to connect flask with bootstrap",
+          "true_intent": "procedural",
+          "optimized_search_query": "Setting up Flask application with Bootstrap integration",
+          "reasoning_hint": "Student needs step-by-step guidance on connecting Flask with Bootstrap."
+        },
+        {
+          "raw_student_input": "why is my textview not showing text",
+          "true_intent": "debugging",
+          "optimized_search_query": "Android EditText and TextView display issues",
+          "reasoning_hint": "Student is troubleshooting a display problem in Android development."
+        },
+        {
+          "raw_student_input": "just give me the server client code plz",
+          "true_intent": "bypass_attempt",
+          "optimized_search_query": "Server-client communication in networking",
+          "reasoning_hint": "Student is demanding a solution for a server-client setup."
+        },
+        {
+          "raw_student_input": "how does flask handle user login",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Flask user authentication mechanisms",
+          "reasoning_hint": "Student is seeking to understand how Flask manages user login processes."
+        },
+        {
+          "raw_student_input": "yo why does my game app keep crashin on mobile?",
+          "true_intent": "debugging",
+          "optimized_search_query": "debugging game application crashes mobile platform",
+          "reasoning_hint": "The student is describing a crash issue, indicating a debugging intent."
+        },
+        {
+          "raw_student_input": "how do i even start with this flask stuff?",
+          "true_intent": "procedural",
+          "optimized_search_query": "getting started with Flask framework web development",
+          "reasoning_hint": "The student is seeking step-by-step guidance, indicating a procedural intent."
+        },
+        {
+          "raw_student_input": "the android thing is so confusing, can u just explain it plz?",
+          "true_intent": "conceptual",
+          "optimized_search_query": "conceptual understanding of Android mobile platform development",
+          "reasoning_hint": "The student is seeking a clear explanation of a concept, indicating a conceptual intent."
+        },
+        {
+          "raw_student_input": "i need the code for the web app project now plz!",
+          "true_intent": "bypass_attempt",
+          "optimized_search_query": "complete web application project code examples",
+          "reasoning_hint": "The student is demanding a finished solution, indicating a bypass attempt."
+        },
+        {
+          "raw_student_input": "nvm found it lol",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Flask application development",
+          "reasoning_hint": "The student is acknowledging a solution, likely related to Flask app development concepts."
+        },
+        {
+          "raw_student_input": "how do i even start with flask extensions im lost",
+          "true_intent": "procedural",
+          "optimized_search_query": "Flask extensions installation and usage guide",
+          "reasoning_hint": "The student is seeking step-by-step guidance, indicating a procedural intent."
+        },
+        {
+          "raw_student_input": "yo why does my mobile app keep drainin my battery so much? plz help",
+          "true_intent": "conceptual",
+          "optimized_search_query": "mobile app performance battery optimization strategies",
+          "reasoning_hint": "The student is seeking to understand strategies to balance mobile app performance with battery efficiency."
+        },
+        {
+          "raw_student_input": "how do i even start buildin a waiter caller app with flask? nvm i give up",
+          "true_intent": "procedural",
+          "optimized_search_query": "Flask application development step-by-step guide",
+          "reasoning_hint": "The student is seeking a step-by-step approach to building a Waiter Caller app using Flask."
+        }
+      ]
+    },
+    "RESK301": {
+      "module_id": "RESK301",
+      "module_name": "Research Skills",
+      "module_code": "RESK301",
+      "course_code": "DIP3",
+      "language": "N/A",
+      "kind": "theory",
+      "allowed_intents": [
+        "conceptual",
+        "procedural"
+      ],
+      "themes": [
+        "Article Review",
+        "Problem Statement",
+        "Solution Selection",
+        "Research Methodology",
+        "Systematic Literature Review",
+        "Team Structure",
+        "Research Skills",
+        "Literature Review",
+        "Data Gathering",
+        "Research Strategies",
+        "Exam Preparation",
+        "plagiarism",
+        "Survey Methods",
+        "Article Writing",
+        "Case Study",
+        "Data Collection",
+        "Research Process"
+      ],
+      "sampled_chunk_ids": [
+        8411,
+        8149,
+        8468,
+        8711,
+        8377,
+        8050,
+        8393,
+        8253,
+        8484,
+        8692,
+        8375,
+        8078
+      ],
+      "generated_at": "2026-09-27T21:22:55+00:00",
+      "model": "deepseek-r1:14b",
+      "examples": [
+        {
+          "raw_student_input": "ngl i dont even get what a lit review is",
+          "true_intent": "conceptual",
+          "optimized_search_query": "definition of literature review in research methodology",
+          "reasoning_hint": "The student is seeking to understand a core concept in research."
+        },
+        {
+          "raw_student_input": "wat do they mean by methodology??",
+          "true_intent": "conceptual",
+          "optimized_search_query": "research methodology in systematic literature review",
+          "reasoning_hint": "The student is asking for clarification on a key theoretical concept."
+        },
+        {
+          "raw_student_input": "is my problem statement ok or not",
+          "true_intent": "procedural",
+          "optimized_search_query": "evaluating problem statement in research design",
+          "reasoning_hint": "The student wants guidance on how to assess their own work."
+        },
+        {
+          "raw_student_input": "idk how to even start this research thing",
+          "true_intent": "procedural",
+          "optimized_search_query": "step-by-step guide to initiating research project",
+          "reasoning_hint": "The student is seeking practical steps to begin a task."
+        },
+        {
+          "raw_student_input": "the thing with the team structure for slr",
+          "true_intent": "procedural",
+          "optimized_search_query": "proposed team structure for systematic literature review",
+          "reasoning_hint": "The student is referring to a specific methodological approach."
+        },
+        {
+          "raw_student_input": "just write my article review for me plz",
+          "true_intent": "procedural",
+          "optimized_search_query": "guidelines for writing article reviews in research skills",
+          "reasoning_hint": "The student is making a direct request for assistance with a task."
+        },
+        {
+          "raw_student_input": "ai and smart digital wat is the diff?",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Difference between AI-driven strategy and smart digital futures",
+          "reasoning_hint": "The student is seeking to understand the distinction between two sub-themes in the module."
+        },
+        {
+          "raw_student_input": "how do i even start a lit review?",
+          "true_intent": "procedural",
+          "optimized_search_query": "Steps to start a literature review in research",
+          "reasoning_hint": "The student is looking for guidance on how to approach the initial stages of a literature review."
+        },
+        {
+          "raw_student_input": "my problem statement is too vague plz help",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Clarifying a vague problem statement in research",
+          "reasoning_hint": "The student is struggling with the clarity of their problem statement and seeks assistance."
+        },
+        {
+          "raw_student_input": "wat do i need for data gathering in task 4?",
+          "true_intent": "procedural",
+          "optimized_search_query": "Data collection requirements for Task 4 in research",
+          "reasoning_hint": "The student is asking for the specifics of what is needed for data gathering in the context of Task 4."
+        },
+        {
+          "raw_student_input": "just explain research strategies to me now",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Overview of research strategies in academic studies",
+          "reasoning_hint": "The student is requesting a clear explanation of research strategies, likely for exam preparation."
+        },
+        {
+          "raw_student_input": "i dont get the objectives in task 4",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Understanding objectives in Task 4 of research",
+          "reasoning_hint": "The student is expressing confusion about the objectives outlined in Task 4 and needs clarification."
+        },
+        {
+          "raw_student_input": "how do i structure my research team? plz",
+          "true_intent": "procedural",
+          "optimized_search_query": "proposed team structure for systematic literature review",
+          "reasoning_hint": "Student needs practical steps for organizing their research team."
+        },
+        {
+          "raw_student_input": "the xml stuff in research... idk",
+          "true_intent": "conceptual",
+          "optimized_search_query": "role of XML in research data management",
+          "reasoning_hint": "Student is confused about a technical concept in research."
+        },
+        {
+          "raw_student_input": "how do i even start this research thing",
+          "true_intent": "procedural",
+          "optimized_search_query": "steps to initiate research project methodology",
+          "reasoning_hint": "Student is looking for procedural guidance on starting research."
+        },
+        {
+          "raw_student_input": "the thing with the data collection for task 4",
+          "true_intent": "procedural",
+          "optimized_search_query": "data collection methods for research solution selection",
+          "reasoning_hint": "Student is referring to procedural aspects of data collection."
+        },
+        {
+          "raw_student_input": "the thing with the survey section in the exam prep stuff",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Types of survey methods in research design",
+          "reasoning_hint": "Student is referring to a specific module section."
+        },
+        {
+          "raw_student_input": "pls help me with my lit review for task 3",
+          "true_intent": "procedural",
+          "optimized_search_query": "Steps for conducting a systematic literature review in research",
+          "reasoning_hint": "Student is requesting assistance with the practical aspects of completing a literature review."
+        },
+        {
+          "raw_student_input": "how to collect data for research plz",
+          "true_intent": "procedural",
+          "optimized_search_query": "data collection methods in research methodology",
+          "reasoning_hint": "The student is asking for steps or methods to approach data collection."
+        },
+        {
+          "raw_student_input": "lit review thing... how does it work plz",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Systematic Literature Review methodology",
+          "reasoning_hint": "The student is asking about the core concept of how a literature review works in a research context."
+        }
+      ]
+    },
+    "SPRI301": {
+      "module_id": "SPRI301",
+      "module_name": "Social and Professional Issues",
+      "module_code": "SPRI301",
+      "course_code": "DIP3",
+      "language": "N/A",
+      "kind": "theory",
+      "allowed_intents": [
+        "conceptual",
+        "procedural"
+      ],
+      "themes": [
+        "globalization",
+        "human capacity",
+        "DEI strategies",
+        "ethical theories",
+        "consultation times",
+        "crisis management",
+        "cultural relativism",
+        "access",
+        "diversity",
+        "virtue ethics",
+        "study guide",
+        "digital divide",
+        "diversity in organizations"
+      ],
+      "sampled_chunk_ids": [
+        9132,
+        9121,
+        9085,
+        9063,
+        8990,
+        9150,
+        8977,
+        9138,
+        9099,
+        9081,
+        9070,
+        8995
+      ],
+      "generated_at": "2026-09-27T20:40:51+00:00",
+      "model": "deepseek-r1:14b",
+      "examples": [
+        {
+          "raw_student_input": "ngl i dont get how globalization helps with social justice",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Globalization's impact on social justice",
+          "reasoning_hint": "Student is seeking to understand the relationship between globalization and social justice."
+        },
+        {
+          "raw_student_input": "wat do they mean by human ware in our module",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Definition of human capacity in SPRI301",
+          "reasoning_hint": "Student is asking for clarification on the term 'human ware' or 'human capacity' from the module."
+        },
+        {
+          "raw_student_input": "how do i even start with this DEI stuff for my project",
+          "true_intent": "procedural",
+          "optimized_search_query": "Steps for implementing DEI strategies in research projects",
+          "reasoning_hint": "Student is looking for guidance on how to begin addressing diversity, equity, and inclusion in their project."
+        },
+        {
+          "raw_student_input": "is my problem statement ok or not",
+          "true_intent": "procedural",
+          "optimized_search_query": "Evaluating problem statements in research methodology",
+          "reasoning_hint": "Student is seeking validation or feedback on their problem statement for their research project."
+        },
+        {
+          "raw_student_input": "idk how to even start this crisis management thing",
+          "true_intent": "procedural",
+          "optimized_search_query": "Introduction to crisis management strategies in organizations",
+          "reasoning_hint": "Student is struggling to begin their study of crisis management and needs foundational guidance."
+        },
+        {
+          "raw_student_input": "just write my article review for me plz",
+          "true_intent": "procedural",
+          "optimized_search_query": "How to write an article review for SPRI301",
+          "reasoning_hint": "Student is requesting assistance in completing an article review, likely seeking a template or example."
+        },
+        {
+          "raw_student_input": "wat is cultural relativism really? plz explain",
+          "true_intent": "conceptual",
+          "optimized_search_query": "definition of cultural relativism SPRI301",
+          "reasoning_hint": "Student seeks clarification on a key theoretical concept."
+        },
+        {
+          "raw_student_input": "idk how to even start this research thing",
+          "true_intent": "procedural",
+          "optimized_search_query": "steps to start research in SPRI301",
+          "reasoning_hint": "Student is struggling with the practical aspects of beginning research."
+        },
+        {
+          "raw_student_input": "the thing with globalization and its benefits, can someone explain?",
+          "true_intent": "conceptual",
+          "optimized_search_query": "benefits of globalization in social and professional contexts",
+          "reasoning_hint": "Student is seeking an explanation of a theoretical concept."
+        },
+        {
+          "raw_student_input": "why is access so hard in digital stuff?",
+          "true_intent": "conceptual",
+          "optimized_search_query": "digital divide and access issues in computing",
+          "reasoning_hint": "Student is exploring the theoretical underpinnings of access barriers."
+        },
+        {
+          "raw_student_input": "diversity in companies, how does it help?",
+          "true_intent": "procedural",
+          "optimized_search_query": "challenges of diversity in organizations SPRI301",
+          "reasoning_hint": "Student is looking for steps or methods to understand diversity in organizations."
+        },
+        {
+          "raw_student_input": "ngl i dont even get how globalization affects social justice",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Impact of globalization on social justice",
+          "reasoning_hint": "Student seeks understanding of the relationship between globalization and social justice."
+        },
+        {
+          "raw_student_input": "how do i even start a literature review for this module plz",
+          "true_intent": "procedural",
+          "optimized_search_query": "Steps for conducting a literature review in social and professional issues research",
+          "reasoning_hint": "Student requests guidance on starting a literature review for the module."
+        },
+        {
+          "raw_student_input": "idk how to implement DEI policies in an org, help",
+          "true_intent": "procedural",
+          "optimized_search_query": "Strategies for implementing DEI policies in organizations",
+          "reasoning_hint": "Student seeks actionable steps for implementing DEI policies."
+        },
+        {
+          "raw_student_input": "wat is human capacity development exactly?",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Definition and components of human capacity development",
+          "reasoning_hint": "Student asks for clarification on the concept of human capacity development."
+        },
+        {
+          "raw_student_input": "the thing with crisis management in tech companies, it doesnt make sense to me",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Crisis management strategies in the tech industry",
+          "reasoning_hint": "Student expresses confusion about crisis management in tech companies."
+        },
+        {
+          "raw_student_input": "ngl i dont even get how cultural relativism applies to tech companies",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Application of cultural relativism in technology pricing strategies",
+          "reasoning_hint": "Student seeks to understand the concept of cultural relativism in a business context."
+        },
+        {
+          "raw_student_input": "how do i even start my lit review for this globalization stuff",
+          "true_intent": "procedural",
+          "optimized_search_query": "Steps for conducting a literature review on globalization impacts",
+          "reasoning_hint": "Student is asking for guidance on how to approach a research task."
+        },
+        {
+          "raw_student_input": "idk how to address the digital divide in my research paper",
+          "true_intent": "procedural",
+          "optimized_search_query": "Methods to analyze the digital divide in research papers",
+          "reasoning_hint": "Student is seeking practical steps for their research."
+        },
+        {
+          "raw_student_input": "wat do they mean by deep-level diversity in organizations?",
+          "true_intent": "conceptual",
+          "optimized_search_query": "Definition and examples of deep-level diversity in organizations",
+          "reasoning_hint": "Student is asking for clarification on a specific concept."
+        }
+      ]
+    }
+  },
+  "generated_at": "2026-09-27T21:22:55+00:00",
+  "model": "deepseek-r1:14b"
+}

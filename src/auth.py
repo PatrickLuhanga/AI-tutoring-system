@@ -38,15 +38,31 @@ class AuthError(Exception):
 @dataclass(slots=True)
 class Identity:
     email: Optional[str]
-    role: str  # student | tutor | admin
+    #: Primary role: ``student`` or ``admin`` (legacy ``tutor`` = student+tutor).
+    role: str
     student_id: Optional[int]
     authenticated: bool
     source: str  # "dev", "sso", "anonymous"
+    #: Dual-role capability: a student may also hold tutor privileges.
+    is_tutor: bool = False
+
+    def roles(self) -> list[str]:
+        if self.role == "admin":
+            return ["admin"]
+        roles = ["student"]
+        if self.is_tutor or self.role == "tutor":
+            roles.append("tutor")
+        return roles
+
+    def can_tutor(self) -> bool:
+        return self.role == "admin" or self.is_tutor or self.role == "tutor"
 
     def to_dict(self) -> dict:
         return {
             "email": self.email,
             "role": self.role,
+            "roles": self.roles(),
+            "is_tutor": self.is_tutor or self.role == "tutor",
             "student_id": self.student_id,
             "authenticated": self.authenticated,
             "source": self.source,
@@ -119,7 +135,13 @@ def resolve_identity(request: Request) -> Identity:
     # Development mode.
     email, requested_role = _identity_from_headers(request)
     if not email:
-        return Identity(email=None, role="student", student_id=None, authenticated=False, source="anonymous")
+        return Identity(
+            email=None,
+            role="student",
+            student_id=None,
+            authenticated=False,
+            source="anonymous",
+        )
     return _load_identity(email, requested_role, source="dev")
 
 
@@ -136,6 +158,7 @@ def _load_identity(email: str, requested_role: Optional[str], source: str) -> Id
                     student_id=int(student.student_id),
                     authenticated=True,
                     source=source,
+                    is_tutor=bool(student.is_tutor) or student.role == "tutor",
                 )
     except Exception as exc:  # noqa: BLE001 - Data Tier must not take the API down
         logger.warning(
@@ -149,7 +172,14 @@ def _load_identity(email: str, requested_role: Optional[str], source: str) -> Id
     role = (requested_role or "student").lower()
     if role not in {"student", "tutor", "admin"}:
         role = "student"
-    return Identity(email=email, role=role, student_id=None, authenticated=True, source=source)
+    return Identity(
+        email=email,
+        role=role,
+        student_id=None,
+        authenticated=True,
+        source=source,
+        is_tutor=role == "tutor",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +205,7 @@ def require_admin(request: Request) -> Identity:
         student_id=None,
         authenticated=True,
         source="admin-key",
+        is_tutor=False,
     )
 
 

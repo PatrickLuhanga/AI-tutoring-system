@@ -253,8 +253,15 @@ def build_intent_prompt(
     message: str,
     module_name: Optional[str] = None,
     history: Optional[Iterable[Mapping[str, str]]] = None,
+    few_shots: Optional[Iterable[Mapping[str, str]]] = None,
 ) -> str:
-    """Build the user turn handed to the Intent Agent."""
+    """Build the user turn handed to the Intent Agent.
+
+    ``few_shots`` are curriculum-grounded demonstrations loaded from
+    ``src/agents/few_shot_registry.json``. Each mapping must expose
+    ``raw_student_input`` and ``intent`` (already translated to the classifier's
+    internal label vocabulary by :mod:`src.agents.few_shot_registry`).
+    """
     parts = []
     if module_name:
         parts.append(f"Active module: {module_name}")
@@ -265,6 +272,19 @@ def build_intent_prompt(
                 f"{item.get('role', 'user')}: {item.get('content', '')}" for item in recent
             )
             parts.append(f"Recent conversation:\n{transcript}")
+    demonstrations = list(few_shots or [])
+    if demonstrations:
+        lines = []
+        for item in demonstrations:
+            text = str(item.get("raw_student_input", "")).strip()
+            label = str(item.get("intent", "")).strip()
+            if text and label:
+                lines.append(f'- "{text}" -> {label}')
+        if lines:
+            parts.append(
+                "Worked examples of messy student messages and their correct "
+                "intent label:\n" + "\n".join(lines)
+            )
     parts.append(f"Student's latest message:\n{message}")
     return "\n\n".join(parts)
 

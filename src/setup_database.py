@@ -18,7 +18,16 @@ from sqlalchemy import func, inspect, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .db import engine, ensure_database_exists
-from .models import INTENT_VALUES, SCAFFOLDING_STAGES, Base, LLMConfig, Module
+from .models import (
+    INTENT_VALUES,
+    SCAFFOLDING_STAGES,
+    Base,
+    Enrollment,
+    LLMConfig,
+    Module,
+    Student,
+    TutorAssignment,
+)
 from .config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(message)s")
@@ -200,6 +209,144 @@ def seed_modules() -> int:
     return len(rows)
 
 
+def ensure_student_columns() -> None:
+    """Add columns that predate the current model to a pre-existing ``students``.
+
+    ``create_all`` never alters an existing table, so databases created before
+    login telemetry was added lack ``students.last_login_at``.
+    """
+    statements = [
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS last_login_at timestamptz",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS is_tutor boolean NOT NULL DEFAULT false",
+        "CREATE INDEX IF NOT EXISTS ix_students_is_tutor ON students (is_tutor)",
+    ]
+    try:
+        with engine.begin() as conn:
+            for sql in statements:
+                conn.execute(text(sql))
+        logger.info("Student columns ensured (last_login_at, is_tutor)")
+    except Exception as exc:  # noqa: BLE001 - schema upgrade should not block startup
+        logger.warning("Could not ensure student columns: %s", exc)
+
+
+def ensure_session_columns() -> None:
+    """Add chat-history columns to a pre-existing ``tutoring_sessions`` table.
+
+    The ``session_messages`` table itself is created by ``create_all`` (it is
+    new); only the two new columns on the existing sessions table need an
+    explicit ``ALTER``.
+    """
+    statements = [
+        "ALTER TABLE tutoring_sessions ADD COLUMN IF NOT EXISTS title varchar(255)",
+        "ALTER TABLE tutoring_sessions ADD COLUMN IF NOT EXISTS message_count integer NOT NULL DEFAULT 0",
+    ]
+    try:
+        with engine.begin() as conn:
+            for sql in statements:
+                conn.execute(text(sql))
+        logger.info("Session columns ensured (title, message_count)")
+    except Exception as exc:  # noqa: BLE001 - schema upgrade should not block startup
+        logger.warning("Could not ensure session columns: %s", exc)
+
+
+#: Demo identities seeded for local development. Real users are provisioned
+#: dynamically on first DUT4life login (see ``src/profiles.py``); these rows just
+#: bootstrap a student, a dual-role tutor and the admin allowlist account.
+DUMMY_USERS = [
+    {
+        "dut4life_email": "student@dut4life.ac.za",
+        "full_name": "Sanele Ndlovu",
+        "student_number": "22000000",
+        "role": "student",
+        "is_tutor": False,
+        "modules": ["IPRT301", "PBDV301"],
+    },
+    {
+        "dut4life_email": "tutor.dev@dut4life.ac.za",
+        "full_name": "Dr. Thabo Mokoena",
+        "student_number": None,
+        "role": "tutor",
+        "is_tutor": True,
+        "modules": ["IPRT301", "PBDV301"],
+    },
+    {
+        "dut4life_email": "tutor.research@dut4life.ac.za",
+        "full_name": "Prof. Naledi Khumalo",
+        "student_number": None,
+        "role": "tutor",
+        "is_tutor": True,
+        "modules": ["RESK301", "SPRI301"],
+    },
+    {
+        "dut4life_email": "admin.system@dut4life.ac.za",
+        "full_name": "System Administrator",
+        "student_number": None,
+        "role": "admin",
+        "is_tutor": False,
+        "modules": [],
+    },
+]
+
+
+def seed_users() -> int:
+    """Upsert the demo identities, their enrollments and tutor assignments.
+
+    Idempotent: re-running updates names/roles and re-asserts module scope
+    without duplicating rows.
+    """
+    with engine.begin() as conn:
+        for user in DUMMY_USERS:
+            conn.execute(
+                pg_insert(Student.__table__)
+                .values(
+                    dut4life_email=user["dut4life_email"],
+                    full_name=user["full_name"],
+                    student_number=user["student_number"],
+                    role=user["role"],
+                    is_tutor=user["is_tutor"],
+                    is_active=True,
+                )
+                .on_conflict_do_update(
+                    index_elements=[Student.__table__.c.dut4life_email],
+                    set_={
+                        "full_name": user["full_name"],
+                        "student_number": user["student_number"],
+                        "role": user["role"],
+                        "is_tutor": user["is_tutor"],
+                        "is_active": True,
+                    },
+                )
+            )
+
+            student_id = conn.execute(
+                select(Student.student_id).where(Student.dut4life_email == user["dut4life_email"])
+            ).scalar_one()
+
+            for module_id in user["modules"]:
+                if user["role"] == "student":
+                    conn.execute(
+                        pg_insert(Enrollment.__table__)
+                        .values(
+                            student_id=student_id,
+                            module_id=module_id,
+                            academic_year="2026",
+                            is_active=True,
+                        )
+                        .on_conflict_do_update(
+                            constraint="uq_enrollment",
+                            set_={"is_active": True},
+                        )
+                    )
+                if user["is_tutor"]:
+                    conn.execute(
+                        pg_insert(TutorAssignment.__table__)
+                        .values(tutor_id=student_id, module_id=module_id)
+                        .on_conflict_do_nothing(constraint="uq_tutor_module")
+                    )
+    logger.info("Seeded %d demo identities", len(DUMMY_USERS))
+    return len(DUMMY_USERS)
+
+
 def seed_llm_config() -> int:
     """Insert the default LLM routing config if none exists (Tier 2).
 
@@ -252,6 +399,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Do not seed the module registry.",
     )
+    parser.add_argument(
+        "--skip-users",
+        action="store_true",
+        help="Do not seed the Dummy Data Login identities.",
+    )
     args = parser.parse_args(argv)
 
     ensure_database_exists()
@@ -259,10 +411,14 @@ def main(argv: list[str] | None = None) -> int:
     create_tables(drop=args.drop)
     sync_enum_constraints()
     ensure_hybrid_search_columns()
+    ensure_student_columns()
+    ensure_session_columns()
     create_vector_indexes()
     create_secondary_indexes()
     if not args.skip_modules:
         seed_modules()
+    if not args.skip_users:
+        seed_users()
     seed_llm_config()
     print_summary()
     logger.info("Database schema initialisation complete.")

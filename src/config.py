@@ -198,6 +198,11 @@ class Settings:
     # Authentication / authorization
     auth_mode: str
     admin_api_key: str
+    #: Comma-separated allowlist of addresses auto-provisioned with the admin
+    #: role on first login. The only hard-coded privilege bootstrap left.
+    admin_emails: str
+    #: Domain every self-service login must belong to (DUT4life).
+    allowed_email_domain: str
     enforce_enrollment: bool
     cors_allowed_origins: str
 
@@ -214,6 +219,7 @@ class Settings:
     llm_top_p: float
     llm_config_secret_key: str
     intent_use_llm: bool
+    intent_use_few_shots: bool
 
     # Inference-tier fault isolation (Ollama circuit breaker)
     ollama_circuit_failure_threshold: int
@@ -262,6 +268,24 @@ class Settings:
     def module_ids(self) -> Dict[str, str]:
         return {key: value["module_id"] for key, value in self.modules.items()}
 
+    def is_admin_email(self, email: Optional[str]) -> bool:
+        """True when ``email`` is in the configured admin allowlist."""
+        normalized = (email or "").strip().lower()
+        if not normalized:
+            return False
+        allow = {
+            entry.strip().lower()
+            for entry in self.admin_emails.split(",")
+            if entry.strip()
+        }
+        return normalized in allow
+
+    def is_institutional_email(self, email: Optional[str]) -> bool:
+        """True when ``email`` belongs to the configured institutional domain."""
+        normalized = (email or "").strip().lower()
+        domain = self.allowed_email_domain.strip().lower().lstrip("@")
+        return bool(normalized) and normalized.endswith(f"@{domain}")
+
 
 def _build_settings() -> Settings:
     content_dir_raw = _str("ACADEMIC_CONTENT_DIR", "academic content")
@@ -293,6 +317,8 @@ def _build_settings() -> Settings:
         flask_debug=_bool("FLASK_DEBUG", False),
         auth_mode=_str("AUTH_MODE", "dev").lower(),
         admin_api_key=_str("ADMIN_API_KEY", "change-me-admin-key"),
+        admin_emails=_str("ADMIN_EMAILS", "admin.system@dut4life.ac.za"),
+        allowed_email_domain=_str("ALLOWED_EMAIL_DOMAIN", "dut4life.ac.za"),
         enforce_enrollment=_bool("ENFORCE_ENROLLMENT", False),
         cors_allowed_origins=_str("CORS_ALLOWED_ORIGINS", "*"),
         default_llm_provider=_str("LLM_PROVIDER", "local").lower(),
@@ -307,6 +333,7 @@ def _build_settings() -> Settings:
         llm_top_p=_float("LLM_TOP_P", 0.9),
         llm_config_secret_key=_str("LLM_CONFIG_SECRET_KEY", ""),
         intent_use_llm=_bool("INTENT_USE_LLM", True),
+        intent_use_few_shots=_bool("INTENT_USE_FEW_SHOTS", True),
         ollama_circuit_failure_threshold=_int("OLLAMA_CIRCUIT_FAILURE_THRESHOLD", 3),
         ollama_circuit_reset_timeout=_float("OLLAMA_CIRCUIT_RESET_TIMEOUT", 30.0),
         ollama_health_timeout=_int("OLLAMA_HEALTH_TIMEOUT", 5),

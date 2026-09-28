@@ -1,10 +1,12 @@
 """SQLAlchemy ORM models for the Hybrid Data Tier.
 
 Relational Store (the "rulebook"):
-    * ``students``            - DUT4life identities + role (student / tutor / admin)
+    * ``students``            - DUT4life identities + role + dual-role ``is_tutor``
     * ``modules``             - the four supported modules
     * ``enrollments``         - student <-> module mapping
     * ``tutor_assignments``   - tutor <-> module RBAC mapping
+    * ``tutoring_sessions``   - one row per chat session (module, title, activity)
+    * ``session_messages``    - persisted user/tutor turns for chat history
     * ``telemetry_logs``      - interaction logs, failure flags, hint depth
     * ``hint_feedback``       - thumbs up/down + reason tags
 
@@ -94,8 +96,15 @@ class Student(Base):
     dut4life_email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(255))
     student_number: Mapped[Optional[str]] = mapped_column(String(32), unique=True)
+    #: Base/primary role: ``student`` or ``admin``. A legacy ``tutor`` value is
+    #: treated as a student with tutor privileges (see :attr:`is_tutor`).
     role: Mapped[str] = mapped_column(String(16), nullable=False, server_default="student")
+    #: Dual-role flag: an admin can grant tutor privileges to any registered
+    #: user, so a student can hold the tutor capability at the same time.
+    is_tutor: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    #: Stamped every time the identity opens the client (login telemetry).
+    last_login_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -111,10 +120,14 @@ class Student(Base):
         cascade="all, delete-orphan",
         foreign_keys="TutorAssignment.tutor_id",
     )
+    sessions: Mapped[list["StudentSession"]] = relationship(
+        back_populates="student", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         _enum_check("role", ROLE_VALUES, "ck_students_role"),
         Index("ix_students_role", "role"),
+        Index("ix_students_is_tutor", "is_tutor"),
     )
 
 
@@ -193,6 +206,89 @@ class TutorAssignment(Base):
     __table_args__ = (
         UniqueConstraint("tutor_id", "module_id", name="uq_tutor_module"),
         Index("ix_tutor_assignments_module", "module_id"),
+    )
+
+
+class StudentSession(Base):
+    """A tutoring session: opened when a student logs in and starts a module chat.
+
+    This is the relational anchor the dashboards read for "who is active now" and
+    "who keeps coming back". ``started_at`` doubles as the login/open timestamp;
+    ``last_activity_at`` and ``turn_count`` are refreshed on every chat turn so
+    the tutor dashboard can compute active students and repeat help requests
+    without scanning the full telemetry history.
+    """
+
+    __tablename__ = "tutoring_sessions"
+
+    session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    student_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("students.student_id", ondelete="SET NULL")
+    )
+    # Snapshot of the identity so an unseeded directory still attributes activity.
+    student_email: Mapped[Optional[str]] = mapped_column(String(255))
+    module_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("modules.module_id", ondelete="SET NULL")
+    )
+
+    #: Short label for the LLM-style history sidebar, set from the first user
+    #: message in the session.
+    title: Mapped[Optional[str]] = mapped_column(String(255))
+
+    started_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_activity_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    turn_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    message_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+
+    student: Mapped[Optional[Student]] = relationship(back_populates="sessions")
+    messages: Mapped[list["SessionMessage"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_sessions_student", "student_id"),
+        Index("ix_sessions_module_time", "module_id", "started_at"),
+        Index("ix_sessions_activity", "last_activity_at"),
+    )
+
+
+class SessionMessage(Base):
+    """One persisted turn in a chat session (user question or tutor reply).
+
+    Telemetry logs the agent internals; this table stores the actual
+    conversation so the client can restore a past session and so a session can
+    be deleted together with its messages.
+    """
+
+    __tablename__ = "session_messages"
+
+    message_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        ForeignKey("tutoring_sessions.session_id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    module_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("modules.module_id", ondelete="SET NULL")
+    )
+    #: The agent audit trail for assistant turns, restored into the audit panel.
+    audit: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
+    # ``clock_timestamp`` (not ``now``) so user and assistant turns appended in
+    # separate statements get distinct, orderable timestamps.
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.clock_timestamp()
+    )
+
+    session: Mapped[StudentSession] = relationship(back_populates="messages")
+
+    __table_args__ = (
+        CheckConstraint("role IN ('user', 'assistant')", name="ck_session_messages_role"),
+        Index("ix_session_messages_session", "session_id", "created_at"),
     )
 
 

@@ -36,8 +36,16 @@ INFERENCE TIER     Local Ollama (Qwen3)  or  a cloud API  -  via Dynamic LLM Rou
 | Inference fault isolation: timeout + circuit breaker around Ollama | `src/inference/ollama_client.py` |
 | Cloud API key stored encrypted in PostgreSQL, not `.env` | `llm_configs` table + `src/secrets_store.py` |
 | Feedback routed straight to telemetry (§3, §12) | `POST /api/feedback` |
-| Student Chat UI (module dropdown, session_id, audit panel, thumbs feedback) | `frontend/src/views/StudentChat.tsx` |
-| Admin/Tutor Dashboard (LLM router control + telemetry charts) | `frontend/src/views/AdminDashboard.tsx` |
+| Role-based Client Tier: login + Student / Tutor / Admin workspaces (§4.2) | `frontend/src/pages/{auth,student,tutor,admin}/` |
+| Dynamic DUT4life provisioning + first-login onboarding (name + modules) | `src/profiles.py`, `frontend/src/pages/auth/OnboardingPage.tsx` |
+| Student Chat with persistent LLM-style history sidebar (create / load / delete) | `frontend/src/pages/student/StudentChat.tsx` |
+| Scoped Tutor Dashboard (active students, struggle trends, repeat help) | `frontend/src/pages/tutor/TutorDashboard.tsx` |
+| System-Wide Admin Dashboard (LLM router, guardrails, users, telemetry) | `frontend/src/pages/admin/AdminDashboard.tsx` |
+| Admin-granted tutor privileges — dual role (student **and** tutor) | `POST /api/admin/grant-tutor`, `frontend/src/pages/admin/UserRolesPanel.tsx` |
+| Unified Login — any DUT4life address self-provisions | `frontend/src/pages/auth/LoginPage.tsx` |
+| Session/login telemetry (`tutoring_sessions`, `students.last_login_at`) | `src/sessions.py` |
+| Chat history persistence (`session_messages`) | `src/history.py`, `src/api/history_routes.py` |
+| Tutor-scoped & system-wide analytics endpoints | `src/analytics.py`, `src/api/analytics_routes.py` |
 
 The working embedding model is the architecture document's `nomic-embed-text`
 (768-dim), served by the same local Ollama runtime used for inference. It is an
@@ -91,6 +99,8 @@ project lead**:
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | `tutor_password` | Only if the lead changed the DB password |
 | `ADMIN_API_KEY` | `change-me-admin-key` | **Yes — the shared admin key** (protects `/api/admin/*`). Change it locally, but keep it in sync with the frontend |
+| `ADMIN_EMAILS` | `admin.system@dut4life.ac.za` | Addresses auto-provisioned with the admin role on first login |
+| `ALLOWED_EMAIL_DOMAIN` | `dut4life.ac.za` | Domain every self-service login must belong to |
 | `LLM_CONFIG_SECRET_KEY` | *(empty)* | **Yes — the encryption master key**; needed only for cloud-provider API keys |
 | `DEFAULT_LOCAL_MODEL` | `qwen3:4b` | Set to `qwen3:8b` if you pulled that model (see §2.6) |
 
@@ -210,6 +220,14 @@ Project302/
 ├── docker-compose.yml           # PostgreSQL 16 + pgvector
 ├── requirements.txt
 ├── frontend/                    # Client Tier — React client (Vite)
+│   └── src/
+│       ├── pages/auth/          # login + first-login onboarding
+│       ├── pages/student/       # Socratic chat + history sidebar
+│       ├── pages/tutor/         # module-scoped Tutor Dashboard
+│       ├── pages/admin/         # system-wide Admin Dashboard + tutor grants
+│       ├── auth/                # AuthProvider + identity, role-based routing
+│       ├── api/mockBackend.ts   # localStorage profiles + chat history (mock mode)
+│       └── navigation.tsx       # capability -> route mapping
 ├── academic content/            # source material (IPRT, PBDV, Resk, SPRI) — read-only
 └── src/
     ├── config.py                # settings + module registry
@@ -224,10 +242,17 @@ Project302/
     ├── corpora/
     │   └── java_error_corpus.py # the 50 synthetic Java errors
     ├── app.py                   # Flask application factory
-    ├── auth.py                  # identity, roles and module-scope checks
+    ├── auth.py                  # identity, dual-role capabilities, module scope
+    ├── profiles.py              # dynamic provisioning + onboarding + tutor grants
+    ├── sessions.py              # login/session telemetry + tutor assignment scope
+    ├── history.py               # chat sessions: persist / list / load / delete
+    ├── analytics.py             # tutor-scoped + system-wide dashboard aggregates
     ├── api/
     │   ├── chat_routes.py       # POST /api/chat, POST /api/feedback
-    │   └── admin_routes.py      # GET/POST /api/admin/llm-config, GET /api/admin/ollama-models
+    │   ├── profile_routes.py    # POST /api/auth/login, GET/PUT /api/profile, tutor grants
+    │   ├── history_routes.py    # GET/DELETE /api/sessions
+    │   ├── admin_routes.py      # GET/POST /api/admin/llm-config, GET /api/admin/ollama-models
+    │   └── analytics_routes.py  # POST /api/session, tutor/admin analytics
     ├── agents/                  # one file per agent (separation of concerns)
     │   ├── intent_agent.py      # §6  Intent Agent
     │   ├── scaffolding.py       # §7  Scaffolding Engine
@@ -359,10 +384,12 @@ Office formats and binaries are skipped and reported. Edit the registry in
 
 | Table | Key columns |
 | --- | --- |
-| `students` | `student_id`, `dut4life_email` (unique), `role` (`student`/`tutor`/`admin`) |
+| `students` | `student_id`, `dut4life_email` (unique), `student_number`, `role` (`student`/`admin`), `is_tutor` (dual role), `last_login_at` |
 | `modules` | `module_id` (PK), `module_name`, `language` |
 | `enrollments` | `student_id`, `module_id`, `academic_year` (unique per triple) |
 | `tutor_assignments` | `tutor_id`, `module_id` (unique per pair) — RBAC mapping |
+| `tutoring_sessions` | `session_id` (PK), `student_id`, `student_email`, `module_id`, `title`, `started_at` (login/open), `last_activity_at`, `turn_count`, `message_count`, `is_active` |
+| `session_messages` | `message_id` (PK), `session_id` → `tutoring_sessions`, `role` (`user`/`assistant`), `content`, `module_id`, `audit` (JSONB), `created_at` |
 | `telemetry_logs` | `session_id`, `module_id`, `intent`, `scaffolding_stage`, `hint_sequence_depth`, `guardrail_flagged`, `guardrail_failure_flags`, retrieved chunk/pattern ids |
 | `hint_feedback` | `session_id`, `message_id`, `rating` (+1 / −1), `reason_tag` |
 | `llm_configs` | `provider` (`local`/`cloud`), `local_model`, `cloud_provider`/`cloud_base_url`/`cloud_model`, `api_key_encrypted`, generation params, `is_active` |
@@ -393,10 +420,22 @@ LIMIT 3;
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
-| `POST` | `/api/chat` | dev identity | Run the full agent workflow for one student turn. |
+| `POST` | `/api/auth/login` | none | Provision (first login) or resolve a DUT4life profile. |
+| `GET` | `/api/profile` | dev identity | The caller's profile. |
+| `PUT` | `/api/profile` | dev identity | Save name, student number and enrolled modules. |
+| `POST` | `/api/chat` | dev identity | Run the full agent workflow; persists both chat turns. |
 | `POST` | `/api/feedback` | dev identity | Record a thumbs up/down + reason tag (straight to telemetry). |
+| `GET` | `/api/sessions` | dev identity | The caller's chat sessions for the sidebar. |
+| `GET` | `/api/sessions/<id>` | dev identity | One session with its full message history. |
+| `DELETE` | `/api/sessions/<id>` | dev identity | Delete a session + its messages, telemetry and feedback. |
+| `POST` | `/api/session` | dev identity | Record a student login + module-chat open (`tutoring_sessions`). |
+| `GET` | `/api/tutor/analytics` | tutor/admin | Active students, struggle topics and repeat help scoped to `tutor_assignments`. |
 | `GET` | `/api/modules` | none | Modules available to the client dropdown. |
 | `GET` | `/api/health` | none | Liveness/readiness (`?deep=1` pings Ollama). |
+| `GET` | `/api/admin/analytics` | `X-Admin-Key` | System-wide telemetry aggregates. |
+| `GET` | `/api/admin/overview` | `X-Admin-Key` | Users, roles (incl. dual-role), guardrail flags, active sessions. |
+| `POST` | `/api/admin/grant-tutor` | `X-Admin-Key` | Grant tutor privileges (dual role) by student number/email/id. |
+| `POST` | `/api/admin/revoke-tutor` | `X-Admin-Key` | Revoke tutor privileges and module assignments. |
 | `GET` | `/api/admin/llm-config` | `X-Admin-Key` | Read the active provider/model (key never returned). |
 | `POST` | `/api/admin/llm-config` | `X-Admin-Key` | Switch local ↔ cloud and/or rotate the API key. |
 | `GET` | `/api/admin/ollama-models` | `X-Admin-Key` | List downloaded Ollama models for a dropdown. |
@@ -489,16 +528,19 @@ place to wire up the real tenant (§4.4). Admin routes always require the
 
 Implemented: all four tiers in their current form — the hybrid data tier, the
 multi-agent orchestration tier (with the Dynamic LLM Router), local inference,
-and the Client Tier prototype (Student Chat + Admin/Tutor dashboard, currently
-driven by mock data until the backend is running).
+and the role-based Client Tier. The client supports dynamic DUT4life profile
+provisioning with first-login onboarding, admin-granted tutor privileges (a user
+may be student **and** tutor), a persistent chat-history sidebar, and the
+scoped Tutor / system-wide Admin dashboards. Each view falls back to mock data
+until the backend is running.
 
 Still outstanding:
 
-* **Analytics endpoint** — the dashboard's telemetry charts expect
-  `GET /api/admin/analytics`, which does not exist yet (mock data only).
-* **Tutor dashboard** scoped to `tutor_assignments` at the query level (§16.1).
-* **DUT4life identity provider** (strict auth mode) and admin endpoints for
-  granting tutor privileges / managing assignments.
+* **DUT4life identity provider** (strict auth mode). Any `*@dut4life.ac.za`
+  address now self-provisions a profile and is onboarded (name + modules), and
+  admins grant tutor privileges (dual role) from the admin dashboard. The
+  Microsoft SSO redirect itself is still pending `AUTH_MODE=strict` /
+  `_verify_dut4life_token`; until then the login screen trusts the email.
 * **Evaluation harness** (accuracy / precision / recall / F1 against a
   ground-truth test set, §3.4 of the paper).
 * Prompt-adjustment cycle (§17), real TSCC few-shot transcripts, and the

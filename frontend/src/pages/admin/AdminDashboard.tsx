@@ -9,8 +9,9 @@ import {
   Server,
   ThumbsDown,
   ThumbsUp,
+  Users,
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -24,58 +25,33 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { api, USE_MOCK } from '../api/client'
-import type { LLMConfig, LLMProvider, OllamaModel, TelemetryAnalytics } from '../types'
+import { api, USE_MOCK } from '../../api/client'
+import { useAuth } from '../../auth/context'
+import { Field, SectionCard, StatCard, inputClass } from '../../components/DashboardKit'
+import type {
+  AdminOverview,
+  LLMConfig,
+  LLMProvider,
+  OllamaModel,
+  TelemetryAnalytics,
+} from '../../types'
+import GuardrailFlagsPanel from './GuardrailFlagsPanel'
+import UserRolesPanel from './UserRolesPanel'
 
 const CATEGORY_COLORS = ['#6366f1', '#f59e0b', '#ec4899', '#14b8a6']
 
-function StatCard({
-  icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: ReactNode
-  label: string
-  value: string
-  hint?: string
-}) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-slate-500">
-        {icon}
-        <span className="text-xs font-semibold uppercase tracking-wide">{label}</span>
-      </div>
-      <div className="mt-2 text-2xl font-semibold text-slate-900">{value}</div>
-      {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
-    </div>
-  )
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactNode
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {label}
-      </span>
-      {children}
-    </label>
-  )
-}
-
-const inputClass =
-  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
-
+/**
+ * System-Wide Admin Dashboard.
+ *
+ * Macro-level oversight: LLM router control, aggregate telemetry, guardrail
+ * flags recorded by the Guardrail Agent, and user/role management.
+ */
 export default function AdminDashboard() {
+  const { user } = useAuth()
   const [config, setConfig] = useState<LLMConfig | null>(null)
   const [models, setModels] = useState<OllamaModel[]>([])
   const [analytics, setAnalytics] = useState<TelemetryAnalytics | null>(null)
+  const [overview, setOverview] = useState<AdminOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<string | null>(null)
@@ -93,15 +69,17 @@ export default function AdminDashboard() {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const [cfg, ollama, telemetry] = await Promise.all([
+      const [cfg, ollama, telemetry, adminOverview] = await Promise.all([
         api.getLLMConfig(),
         api.listOllamaModels(),
         api.getAnalytics(),
+        api.getAdminOverview(),
       ])
       if (cancelled) return
       setConfig(cfg)
       setModels(ollama.models)
       setAnalytics(telemetry)
+      setOverview(adminOverview)
       setProvider(cfg.provider)
       setLocalModel(cfg.local.model)
       setOllamaBaseUrl(cfg.local.base_url)
@@ -141,6 +119,14 @@ export default function AdminDashboard() {
     [analytics],
   )
 
+  async function reloadOverview() {
+    try {
+      setOverview(await api.getAdminOverview())
+    } catch {
+      /* keep the current view if the refresh fails */
+    }
+  }
+
   async function save() {
     setSaving(true)
     try {
@@ -152,7 +138,7 @@ export default function AdminDashboard() {
         cloud_base_url: cloudBaseUrl,
         cloud_model: cloudModel,
         ...(apiKey ? { api_key: apiKey } : {}),
-        updated_by: 'admin@example.edu',
+        updated_by: user?.email ?? 'admin',
       })
       setConfig(updated)
       setApiKey('')
@@ -164,7 +150,7 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-slate-400">
+      <div className="flex flex-1 items-center justify-center text-slate-400">
         <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
         Loading dashboard…
       </div>
@@ -175,9 +161,9 @@ export default function AdminDashboard() {
     <div className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto px-4 py-6">
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Admin · Tutor Dashboard</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Admin Dashboard</h1>
           <p className="text-sm text-slate-500">
-            Dynamic LLM Router control and telemetry health for the tutoring agents.
+            System-wide oversight, LLM routing, guardrails and telemetry health.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -195,7 +181,35 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      {/* -------------------------- System stat cards ------------------------ */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          icon={<Gauge className="h-4 w-4" />}
+          label="LLM health index"
+          value={`${Math.round(satisfactionRate * 100)}%`}
+          hint="Thumbs-up share of rated hints"
+        />
+        <StatCard
+          icon={<Activity className="h-4 w-4" />}
+          label="Avg latency"
+          value={`${analytics?.average_latency_ms ?? 0} ms`}
+          hint="Local + cloud, last 24h"
+        />
+        <StatCard
+          icon={<Users className="h-4 w-4" />}
+          label="Active sessions"
+          value={(overview?.active_sessions ?? 0).toLocaleString()}
+          hint={`${(overview?.total_students ?? 0).toLocaleString()} students enrolled`}
+        />
+        <StatCard
+          icon={<ThumbsDown className="h-4 w-4" />}
+          label="Flagged hints"
+          value={(analytics?.satisfaction.thumbs_down ?? 0).toLocaleString()}
+          hint={`of ${(analytics?.total_hints ?? 0).toLocaleString()} hints`}
+        />
+      </div>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
         {/* ---------------------------- LLM Router ---------------------------- */}
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
@@ -314,8 +328,8 @@ export default function AdminDashboard() {
               {config && (
                 <>
                   Effective target{' '}
-                  <span className="font-mono text-slate-600">{config.effective.target}</span> ·
-                  updated by {config.updated_by}
+                  <span className="font-mono text-slate-600">{config.effective.target}</span> · updated
+                  by {config.updated_by}
                 </>
               )}
             </div>
@@ -331,57 +345,45 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* ------------------------ Telemetry stat cards ---------------------- */}
-        <section className="grid grid-cols-2 gap-4">
-          <StatCard
-            icon={<Gauge className="h-4 w-4" />}
-            label="LLM Health Index"
-            value={`${Math.round(satisfactionRate * 100)}%`}
-            hint="Thumbs-up share of all rated hints"
-          />
-          <StatCard
-            icon={<Activity className="h-4 w-4" />}
-            label="Avg latency"
-            value={`${analytics?.average_latency_ms ?? 0} ms`}
-            hint="Local + cloud, last 24h"
-          />
-          <StatCard
-            icon={<ThumbsUp className="h-4 w-4" />}
-            label="Helpful hints"
-            value={(analytics?.satisfaction.thumbs_up ?? 0).toLocaleString()}
-            hint={`of ${(analytics?.total_hints ?? 0).toLocaleString()} hints`}
-          />
-          <StatCard
-            icon={<ThumbsDown className="h-4 w-4" />}
-            label="Flagged hints"
-            value={(analytics?.satisfaction.thumbs_down ?? 0).toLocaleString()}
-            hint={`${(analytics?.failure_categories ?? []).reduce(
-              (sum, c) => sum + c.count,
-              0,
-            )} tagged reasons`}
-          />
-        </section>
+        {/* ------------------------------ Guardrails --------------------------- */}
+        <div className="space-y-5">
+          <GuardrailFlagsPanel flags={overview?.guardrail_flags ?? []} />
+          <SectionCard
+            title="Feedback categories"
+            description="Thumbs-down reason tags collected from student micro-feedback."
+            icon={<ThumbsUp className="h-4 w-4 text-amber-500" />}
+          >
+            <div className="space-y-2">
+              {(analytics?.failure_categories ?? []).map((category, index) => (
+                <div key={category.reason_tag} className="flex items-center gap-3 text-sm">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }}
+                  />
+                  <span className="flex-1 text-slate-600">{category.label}</span>
+                  <span className="font-mono text-xs text-slate-400">
+                    {category.count.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
       </div>
 
-      {/* --------------------------- Charts ---------------------------------- */}
+      {/* ------------------------------- Charts ------------------------------ */}
       <div className="mt-5 grid gap-5 lg:grid-cols-5">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-3">
-          <h2 className="mb-1 text-base font-semibold text-slate-800">
-            Satisfaction by module
-          </h2>
-          <p className="mb-4 text-xs text-slate-400">
-            Percentage of rated hints with a thumbs-up, per enrolled module.
-          </p>
+        <SectionCard
+          title="Satisfaction by module"
+          description="Percentage of rated hints with a thumbs-up, per enrolled module."
+          className="lg:col-span-3"
+        >
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={moduleData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
-                <YAxis
-                  domain={[0, 100]}
-                  unit="%"
-                  tick={{ fontSize: 12, fill: '#64748b' }}
-                />
+                <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 12, fill: '#64748b' }} />
                 <Tooltip
                   cursor={{ fill: '#f1f5f9' }}
                   contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
@@ -391,13 +393,13 @@ export default function AdminDashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </section>
+        </SectionCard>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
-          <h2 className="mb-1 text-base font-semibold text-slate-800">Failure categories</h2>
-          <p className="mb-4 text-xs text-slate-400">
-            Thumbs-down reason tags collected from the student micro-feedback.
-          </p>
+        <SectionCard
+          title="Failure categories"
+          description="Share of thumbs-down reason tags."
+          className="lg:col-span-2"
+        >
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -426,7 +428,12 @@ export default function AdminDashboard() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </section>
+        </SectionCard>
+      </div>
+
+      {/* ---------------------------- User & roles --------------------------- */}
+      <div className="mt-5">
+        <UserRolesPanel overview={overview} onRefresh={reloadOverview} />
       </div>
     </div>
   )

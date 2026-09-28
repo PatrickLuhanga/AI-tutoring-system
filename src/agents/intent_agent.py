@@ -27,11 +27,15 @@ from ..config import settings
 from ..inference import LLMError
 from ..llm_router import LLMRouter, get_router
 from ..prompts import INTENT_ROUTES, INTENT_SYSTEM, ROUTE_DIRECT, build_intent_prompt
+from .few_shot_registry import FewShotExample, FewShotRegistry, get_few_shot_registry
 
 logger = logging.getLogger(__name__)
 
 #: Complete label vocabulary accepted from the LLM classifier.
 _VALID_LABELS = frozenset(INTENT_ROUTES)
+
+#: How many curriculum-grounded demonstrations to inject into the prompt.
+_MAX_FEW_SHOTS = 12
 
 
 @dataclass(slots=True)
@@ -124,9 +128,18 @@ _CODE_SIGNAL_RE = re.compile(r"```|;\s*$|\{\s*$", re.MULTILINE)
 class IntentAgent:
     """Classifies the student's request, preferring the LLM with a fallback."""
 
-    def __init__(self, router: Optional[LLMRouter] = None, use_llm: Optional[bool] = None) -> None:
+    def __init__(
+        self,
+        router: Optional[LLMRouter] = None,
+        use_llm: Optional[bool] = None,
+        registry: Optional[FewShotRegistry] = None,
+    ) -> None:
         self.router = router or get_router()
         self.use_llm = settings.intent_use_llm if use_llm is None else use_llm
+        if settings.intent_use_few_shots:
+            self.registry = registry if registry is not None else get_few_shot_registry()
+        else:
+            self.registry = None
 
     def classify(
         self,
@@ -144,13 +157,36 @@ class IntentAgent:
         return self._heuristic(message)
 
     # -- LLM classification -------------------------------------------------
+    def _few_shots_for(self, module_name: Optional[str]) -> list[dict[str, str]]:
+        """Return a balanced slice of registry demonstrations for the prompt."""
+        if self.registry is None or self.registry.is_empty():
+            return []
+        examples: list[FewShotExample] = self.registry.for_module(module_name) or self.registry.examples
+        by_label: dict[str, list[FewShotExample]] = {}
+        for example in examples:
+            by_label.setdefault(example.intent, []).append(example)
+        ordered: list[FewShotExample] = []
+        while len(ordered) < _MAX_FEW_SHOTS and any(by_label.values()):
+            for label in sorted(by_label):
+                bucket = by_label[label]
+                if bucket:
+                    ordered.append(bucket.pop(0))
+                    if len(ordered) >= _MAX_FEW_SHOTS:
+                        break
+        return [
+            {"raw_student_input": example.raw_student_input, "intent": example.intent}
+            for example in ordered
+        ]
+
     def _classify_llm(
         self,
         message: str,
         module_name: Optional[str],
         history: Optional[Iterable[Mapping[str, str]]],
     ) -> Optional[Intent]:
-        prompt = build_intent_prompt(message, module_name, history)
+        prompt = build_intent_prompt(
+            message, module_name, history, few_shots=self._few_shots_for(module_name)
+        )
         response = self.router.generate(
             [
                 {"role": "system", "content": INTENT_SYSTEM},

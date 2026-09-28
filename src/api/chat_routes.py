@@ -16,9 +16,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from ..agents import ChatRequest, TutoringWorkflow
 from ..auth import check_module_access, resolve_identity
 from ..db import session_scope
+from ..history import append_message
 from ..inference import INFERENCE_UNAVAILABLE_MESSAGE
 from ..llm_router import LLMError
 from ..models import FEEDBACK_REASON_TAGS, HintFeedback, Module
+from ..sessions import record_session_turn
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,28 @@ def chat():
         return jsonify({"error": access.reason, "module_id": module_id}), status
 
     session_id = str(payload.get("session_id") or uuid.uuid4().hex)
+    # Refresh the relational session heartbeat: last activity + turn counter.
+    record_session_turn(
+        session_id=session_id,
+        student_id=identity.student_id,
+        email=identity.email,
+        module_id=module_id,
+    )
+    # Persist the student's turn so the sidebar can restore the conversation.
+    user_message_id = uuid.uuid4().hex
+    try:
+        append_message(
+            session_id=session_id,
+            role="user",
+            content=message,
+            module_id=module_id,
+            student_id=identity.student_id,
+            email=identity.email,
+            message_id=user_message_id,
+        )
+    except Exception as exc:  # noqa: BLE001 - history must never break a reply
+        logger.warning("Could not persist the student turn: %s", exc)
+
     request_obj = ChatRequest(
         message=message,
         module_id=module_id,
@@ -82,6 +106,28 @@ def chat():
     body = result.to_dict()
     body["identity"] = identity.to_dict()
     body["module_access"] = access.to_dict()
+    body["user_message_id"] = user_message_id
+    # Persist the tutor's reply together with its audit trail.
+    try:
+        append_message(
+            session_id=session_id,
+            role="assistant",
+            content=result.reply,
+            module_id=module_id,
+            student_id=identity.student_id,
+            email=identity.email,
+            message_id=result.message_id,
+            audit={
+                "intent": result.intent,
+                "scaffolding": result.scaffolding,
+                "guardrail": result.guardrail,
+                "retrieval": result.retrieval,
+                "llm": result.llm,
+                "telemetry_log_id": result.telemetry_log_id,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 - history must never break a reply
+        logger.warning("Could not persist the tutor turn: %s", exc)
     return jsonify(body), 200
 
 
