@@ -1,0 +1,1549 @@
+{
+  "schema_version": 1,
+  "source": "Practice question bank, extracted from the papers in this folder.",
+  "papers": [],
+  "questions": [
+    {
+      "module_id": "IPRT301",
+      "prompt": "In Integrative programming, at least one of the components to be integrated must exist.\nAn abstract class can extend another abstract class.\nYou must convert a class which contains variables and method implementations to an\ninterface.\nThe main purpose of an abstract classes is code reuse.\nAny class that extends an abstract class must also be declared abstract.\nDynamic binding is linked to method override.\nDesign patterns determine what programming languages to use.\nOrganizations can develop their own design patterns.\nRMI allows the use of different programming languages for the server and client applications.\nServer-side scripts are faster to process, compared to client-side scripts",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - IPRT301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "\"Integrative programming improves interoperability of heterogeneous hardware and software\nresources\". Briefly explain. \nState and briefly describe one advantage of an interface over abstract class. \n\"Interfaces or abstracts classes are preferred to concrete class\". Explain why. \nBriefly explain the importance of standardization in data exchange. Illustrate your answer with\nan example.\n\nExplain why multithreading is an important feature of distributed applications",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - IPRT301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the tag below which links fees.xml to the structure in fees.dtd. \n!DOCTYPE",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - IPRT301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the header for ICalcFund. \nWrite the method calcAmount(double average) in ICalcFund. \nWrite the class header for CalcFundlmp. \nComplete the class Server (below) which registers and binds an instance of the remote object.\nName the remote object fund; use the port 1990. \npublic class Server \npublic static void main(String args)\nCalcFundImp cf=new CalcFundImp();//Create instance\nRegistry reg=",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - IPRT301 (p11) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the class Client (below) which calls calcAmount(double average) of the remote\nobject with the value 80.0 and displays the result on the screen. Use the local host. \npublic class Client \npublic static void main(String args)\nic=\nSystem.out.printlnC'The amount is \"",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - IPRT301 (p11) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "The figure below shows the package jspem contains classes Employee (abstract) and FullTime\n(which extends Employee). The method toString() returns the string representation of an object of\nthe class.\njspemp\n Employee.javi\n FullTime.java\nEmployee\no id\no name\nEmployee0\nEmployee(String, String)\ncalcMonthPay0 : double\ntoString0 : String\nFullTime\na annual\n c FullTimeO\n c FullTime(String, String, double)\ncalcMonthPay0 : double\ntoStringO : String\nThe package is imported into JSP code to display an object of an employee in a web page (as shown\nbelow).\nhttp .//localhost:8080/Tet2jspemp/employee.jsp\nEmployee Salary\nEmployee ld: E2012\nName: Eb Adu\nAnnual salary: 240000.0 Gross Monthly: 20000.0\nAssume the classes in package jspemp have been implemented",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - IPRT301 (p13) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the JSP page directive (below), which specifies the programming language imports\nthe classes Employee and FullTime. \n page language=\"\n\" import=\"",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - IPRT301 (p13) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the JSP scriptlet, which creates an instance of FullTime and displays the instance in the\nweb page",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - IPRT301 (p13) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Briefly explain how Integrative programming can reduce software development cost. \n\"Choose an interface or abstract class over a concrete class\". Explain why. \nWhat is the main disadvantage of XML, compared to JSON? \nBriefly explain how distributed applications improve scalability.\n\n\"Multithreading is an important feature of distributed applications\". Explain why.\n\npg. 1",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - IPRT301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Explain how the multiple inheritance can be resolved. \nWhat must be the new relationship between C and l? Explain your answer. \n\npg. 3",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - IPRT301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "The UML diagram below shows Item contains code, name and price of an item. Phone contains the\nmodel and storage capacity. IPriceCalculator contains VAT (a constant, 15 ) and calcTotalPrice(),\nwhich returns the total price as: the price and VAT payable (calculated as 15 of the price of the\nitem). IDevice contains purpose(), which returns a string.\nItem\n code: String\n name: String\n price: double\nIPriceCalculator\n VAT: double\n caIcTotalPrice(): double\nPhone\n-model: String\n-storage: int\nIDevice",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - IPRT301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the header for ICalcFund. \nWrite the method calcAmount(double average) in ICalcFund. \nWrite the class header for CalcFundlmp. \nComplete the class Server (below) which registers and binds an instance of the remote object.\nName the remote object fund; use the port 1990. \npublic class Server \npublic static void args)\nCalcFundImp cf=new CalcFundImp();//Create instance\nRegistry reg=",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - IPRT301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the class Client (below) which calls calcAmount(doubIe average) of the remote\nobject with the value 80.0 and displays the result on the screen. Use the local host. \npublic class Client \npublic static void main(String args)\nic=\nSystem.out.println(\"The amount is \"",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - IPRT301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the code below which connects to a URL resource (a file \"fees.dtd\" in the folder webapp\non a local host) on port 8080 to read the content of the resource and display on the screen. Use\nURLConnection. The program should close all streams.\npublic void read() throws Exception \n\npg. 5",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - IPRT301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the JSP action tag, which creates an instance called assesss of Assessment. \n jsp:useBean id=\"\nclass=\"",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - IPRT301 (p7) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the JSP action tags to get and display the values of the instance assess. \nStudent ld= jsp:getProperty\nDp= jsp: getProperty\nExam = jsp: getProperty\n br/ \n/ / br/",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - IPRT301 (p7) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write an EL to call the method calcDp() and display the final mark. \nFinal mark=\n\npg. 6",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - IPRT301 (p7) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Integrative programming allows software developers to create platform-independent\napplications.\nA design pattern suggests the programming language to solve a problem.\nA design pattern is only a guideline on how to solve a problem.\nAny class can be declared an abstract class.\nAn abstract class cannot extend another abstract class.\nMethod override occurs in the same class.\nAn XML document is encoded and decoded in data exchange among different platforms.\nCORBA supports the implementation of server and client applications in different\nprogramming languages.\nJSP code contains a main method where execution begins.\nJSP code runs in a client browser",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Explain why it is preferable to design interfaces or abstract classes, rather than concrete\nclasses. \nDescribe the Singleton design pattern. Illustrate with an example where this pattern can be\nused. \nGive one reason why server-side scripts are preferable to client-side scripts. \nExplain why the following are important factoi distributed applications. \na. Exception handling\nb. Multithreading",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the DTD file (marksheet.dtd), below, which defines the structure in\nmarksheet.xml.\n ?xml version=11.O'\n !ELEMENT Marksheet (Student)",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the tag below which links marksheet.xml to the structure in marksheet.dtd.\nmarks)\n!DOCTYPE\nThe data in marksheet.xml is to be displayed in a web page, as shown below.\n http://bcalrost8080/speciatexarnvwb/marksheeLxml\nFinal marks\nId Name Final ma",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "The UML diagram below shows Item contains code, name and price of an item. Phone contains the\nmodel and storage capacity. IPriceCalcuIator contains VAT (a constant, 15 ) and calcTotalPrice(),\nwhich returns the total price as the total of price and VAT payable. The VAT payable is calculated as",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "of the price of the item. IDevice contains purpose(), which returns a string.\nItem\n ode; String\n name: Strlng\n prlce: double\nIPriceCalculator\n VAT: double\n calcTotalPrIce(): double\nPh one\nString\n-storage: int\nIDevice\n p pose(): String",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the method calcTotalPrice() in IPriceCalcuIator. \nWrite the implementation of calcTotalPrice() in Item. \nWrite the class header for Phone",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the header of the remote interface ICalcSquare",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the class header for CalcSquarelmp",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the method calcSquare(double num) in CalcSquarelmp",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the class Server (below) which creates, registers and binds an instance (obj) of\nthe remote object. Bind the name square to the remote ob ect; use port 1888. \npublic class Server \npublic static void main(String args)",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the class Client (below) which calls calcSquare(double num) of the remote object\nwith the value 80.0 and displays the result on the screen. Use the local host. A typical\noutput is shown below. \nThe square of 10.0 is 100.0\npublic class Client \npublic static void main(String args)",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Briefly explain what will happen if the Client program in this RMI application is started\nbefore the Server program.\n\npg. 4",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the JSP page directive (below), which specifies the programming language and\nimports the class Item",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the JSP scriptlet, which creates an instance of Item and calls the appropriate method to\ndisplay the details as shown in the web page. \n\npg. 5",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - February Special - IPRT301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "State whether the following is true or false about polymorphism",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "What is the main challenge with Integrative programming?",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Give one reason why XML is important in Integrative programming",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Give one reason why StaX is preferable to DOM",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "What is the main difference between Webservice and Microservice architectures?",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Using I and A, explain why \"interface is a contract\".\n\nPage 218",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "The UML diagram below shows the classes Arithmetic, Addition, Subtraction,\nArithmeticFactory and Tester.\n-4\nArithmetic\n numl: double\n num2: double\n operator: char\n co'culate(): double\nSubtraction\nArithmeticFactory\n createlnstance(doublenl, doublen2,\nchar op)\nI Tester\nrnainO: void\n\nArithmetic is an abstract class; numl and num2 are numbers; operator is a character\nrepresenting an arithmetic operation, e.g., ' ' , ' ', etc.); and calculate() is an abstract\nmethod. The class contains appropriate constructors and toString() method\nAddition and Subtraction inherit Arithmetic\nAddition ovenides calculate() to return the sum of numl and num2. The class contains\nappropriate constructors and toString()\nSubtraction overrides calculate() to return the value when num2 is subtracted from\nnuml. The class contains appropriate constructors and toString() method\nArithmeticFactory is a factory class. createlnstance(double nl, double n2, char op)\ntakes three parameters: nl and n2 (numbers) and op (a character). If the character is\n ' ' , the method uses the parameters to create and return an instance of Addition.\n '-' , the method uses the parameters to create and return an instance of Subtraction.\nTester creates an instance of ArithmeticFactory and calls its method to return an\ninstance of a subclass (i.e., Addition or Subtraction) of ArithmeticFactory. This\nsubclass is then displayed on the screen.\nUse the information above to answer Questions 1 to 5 below",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the method calculate() in the class Arithmetic",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the method calculate() in the class Addition.\n\nPage 318",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "library.dtd contains the DTD below, which defines the XML structure in library.xml.\nLibrary\nbook\nbook isbn CDATA\ntitle\nBelow is the data in librar .xml.\nisbn",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the code in library.xml to link to the structure in library.dtd",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the code segment below for main() in ClientTester which creates an instance of\nClient (called cl) and calls writeAndRread(Item i) with an instance of Item (called il).\nHandle all errors. Assume all the classes and their methods (including appropriate\nconstructors and toString() methods) have been implemented.\npublic class ClientTester \npublic static void main(String args)\nItem il=new Item(\"Biscuit\", 100);\nClient cl=new Client();\nSystem.out.println(i 1\nPrice (Price VAT \n\nPage 818",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - IPRT301 (p9) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Explain why the diagram cannot be converted to a Java program?",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Supp - IPRT301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the class header of BankAccount for this distributed application",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Supp - IPRT301 (p9) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the class header for Transactionlmp",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Supp - IPRT301 (p9) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Complete the code segment below for a class Server which creates, registers and binds an\ninstance of Transactionlmp (called ti) with the reference \"account\". Assume\n\nTransactionlmp has been implemented. Use port 2001.\npublic class Server \npublic static void main(String args) throws Exception \nTransactionlmp ti \nRegistry reg=\nreg.rebind( );",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Supp - IPRT301 (p10) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "In general, cohesion among members of a class is preferable.\nJava allows a subclass to inherit two or more superclasses.\nAn abstract class can extend another abstract class.\nAn instance of a subclass can behave as the superclass.\nAn appropriate method for an instance of a subclass is selected at run time.\nIn general, members of an interface are declared private.\nAn interface cannot contain constants.\nA superclasss cannot contain method implementation.\nAn interface cannot contain method implementation.\nMethod override is when two or more methods in the same class have the same name but\ndifferent parameter list",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2025 - February Special - IPRT301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Explain why you will choose JSON over XML for data exchange.\nExplain how integrative programming supports scalability.\nMention and briefly describe one challenge with integrative programming.\nExplain why design patterns are important in integrative programming?\nDescribe microservices architecture. Mention one benefit",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2025 - February Special - IPRT301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Briefly describe when the following design patterns are useful (example: Factory- when you need\nto create instances of subclasses of a superclass)",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2025 - February Special - IPRT301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the method calcCharges() in the class BankAccount",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2025 - February Special - IPRT301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the method calcCharges() in the class Loan",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2025 - February Special - IPRT301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "IPRT301",
+      "prompt": "Write the class header of FeeAccount for this distributed application.\nWrite the code for IFeeCaIcuIator.\nWrite the class header for FeeCalculatorlmp.\n\nWrite the method calcFinalAmt() in FeeCalculatorlmp to call calcTotal() and calcDiscount()\nand return the final amount payable by a family.\n\nComplete the code segment below for a class Server which creates, registers and binds an\ninstance of FeeCalculatorlmp (called fc) with the reference \"fees\". Assume FeeCalculatorlmp\nhas been implemented. Use port 2222.\npublic class Server \npublic static void main (String \nFeeCa1cu1atorImp fc\nRegistry\n Paper\nargs)\n\nPage 15",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2025 - February Special - IPRT301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the difference between internal or company-specific platforms and external or industry-wide platforms in the context of industrial platforms. Provide examples of each type and discuss their characteristics in the context of new product development and incremental innovation.\n\n###",
+      "answer_notes": "Internal or company-specific platforms are designed and developed by a single company to support its own internal processes and products. These platforms are tailored to the specific needs and goals of the company, often integrating with other internal systems and applications. For example, a manufacturing company might develop its own platform for managing and controlling its production processes, integrating with its ERP (Enterprise Resource Planning) system and other internal software. The characteristics of internal platforms include being highly customized, tightly integrated with the company's existing systems, and often proprietary.\n\nExternal or industry-wide platforms, on the other hand, are designed to be used by multiple companies within a specific industry. They provide a common framework and set of tools for managing and controlling industrial operations, often with a focus on interoperability and standardization. For example, a platform like GE Predix or MindSphere is designed to be used by multiple manufacturers and service providers in the industrial sector, enabling them to connect their machines and devices to the platform. The characteristics of external platforms include being more standardized, open, and interoperable, and often being built on top of cloud computing and data analytics services.\n\nIn the context of new product development and incremental innovation, internal platforms are more suited to companies that are already deeply integrated into their own internal systems and processes. External platforms, on the other hand, are better suited for companies that are looking to integrate with other companies in the industry, share data and workflows, or leverage the collective expertise and resources of the industry.",
+      "difficulty": "medium",
+      "origin": "generated",
+      "source_label": "AI-generated for revision - not from a past paper"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the concept of an industrial platform and differentiate between internal and external platforms. Discuss the trade-offs involved in designing such platforms, particularly focusing on the stability of the system architecture and the systematic reuse of modular components.\n\n###",
+      "answer_notes": "An industrial platform is a set of reusable components or technologies that can be used to build a family of related products or new features. There are two types of industrial platforms: internal and external.",
+      "difficulty": "medium",
+      "origin": "generated",
+      "source_label": "AI-generated for revision - not from a past paper"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the role of Domain Specific Languages (DSLs) in robotics software development and provide examples of how DSLs are used in the industry. Discuss the key characteristics of DSLs and their benefits in the context of robotics software development.\n\n**",
+      "answer_notes": "**  \nDomain Specific Languages (DSLs) play a significant role in robotics software development by providing specialized syntax and semantics tailored to the specific domain and problem at hand. In the robotics industry, DSLs are used to define and manipulate the complex behaviors and interactions of robotic systems, making the development process more efficient and effective.\n\nKey characteristics of DSLs in robotics include:",
+      "difficulty": "medium",
+      "origin": "generated",
+      "source_label": "AI-generated for revision - not from a past paper"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "In the context of robotics, how does a Domain Specific Language (DSL) enhance the development process for controlling robot behavior compared to a general-purpose programming language? Discuss at least two advantages of using a DSL for robotics applications.\n\n**",
+      "answer_notes": "**  \nA Domain Specific Language (DSL) in robotics enhances the development process by providing tailored commands and syntax that closely align with the domain-specific knowledge and terminology of the robot's behavior, movement, or communication. This leads to more intuitive and readable code, which is easier for domain experts (such as engineers or technicians) to understand and maintain. Additionally, DSLs can offer higher productivity by allowing developers to focus on the specific requirements of the robot's behavior without being distracted by the complexities of general-purpose programming constructs. For example, a DSL for robot control might include commands like \"moveForward()\" and \"rotateLeft()\", which are more intuitive and easier to use than general-purpose programming constructs like loops and conditionals.",
+      "difficulty": "medium",
+      "origin": "generated",
+      "source_label": "AI-generated for revision - not from a past paper"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "In the context of robotics, how do Visual Programming Languages (VPLs) like Choregraphe, LightRocks, DiaSpec, and Sumsumption differ from traditional programming languages? Provide at least two advantages of using VPLs in robotic programming.\n\n**",
+      "answer_notes": "**  \nVPLs like Choregraphe, LightRocks, DiaSpec, and Sumsumption differ from traditional programming languages in that they use graphical elements and visual representations to create and manipulate programs, rather than relying on textual code. This visual approach offers several advantages in robotic programming. Firstly, VPLs provide a better visualization and understanding of both the modeling process and the final model, which can be particularly beneficial for complex systems. Secondly, they reduce the cognitive load on developers by allowing them to focus more on the logic and structure of the program rather than syntax and semantics, thereby potentially reducing errors and increasing productivity.",
+      "difficulty": "medium",
+      "origin": "generated",
+      "source_label": "AI-generated for revision - not from a past paper"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the concept of internal or company-specific platforms in the context of industrial innovation. How do they differ from external or industry-wide platforms? Provide an example of how a company might use internal platforms to meet the needs of different customers.\n\n###",
+      "answer_notes": "Internal or company-specific platforms are designed for a single organization and are used to support the development of new products or services that can be reused across different projects. They are characterized by a stable system architecture and the systematic or planned reuse of modular components. This allows for the development of a family of related products or new features through the deployment of these components.\n\nIn contrast, external or industry-wide platforms are designed for a broader audience and are often used by multiple companies. They are typically used to monitor, control, and analyze industrial operations, handle big data, AI models, and provide insights for various industrial applications. These platforms are often built on top of or embedded within other platforms, and they can be used to enable teamwork, sharing data, workflows, and real-time communication across teams and robots.\n\nFor example, a company might use internal platforms to develop a range of products, such as different types of consumer electronics devices or automobile products. These internal platforms allow the company to create a variety of products that can be customized to meet the needs of different customer segments. In contrast, external platforms might be used to monitor and optimize energy consumption across industrial equipment, providing insights and solutions that can be used by multiple companies in different industries.",
+      "difficulty": "medium",
+      "origin": "generated",
+      "source_label": "AI-generated for revision - not from a past paper"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the concept of an industrial platform and provide an example of an external or industry-wide platform. Additionally, discuss the design principles of industrial platforms and how they ensure stability and openness.\n\n**",
+      "answer_notes": "**  \nAn industrial platform is a foundational product, service, or technology developed by one or more firms that serves as a basis for other businesses to build further complementary innovations. It solves a specific business problem for many businesses and users in an industry. Examples of external or industry-wide platforms include Microsoft Windows, Linux operating systems, Intel and ARM microprocessors, Apple’s iOS and Apple App Store, Google’s Internet search engine, and social networking sites such as Facebook, LinkedIn, and Twitter.\n\nThe design principles of industrial platforms include ensuring the stability of the system architecture and inverting the logic of design. Interfaces around the platform must be sufficiently open to allow outside firms to \"plug in\" complements and innovate on these complements, thereby making money from their investments. For instance, mobile application APIs and cloud computing platforms have varying levels of openness, ranging from high to low, which affects the cost of access and the extent of interoperability.\n\nIn the context of robotics, the goal is to design machines that assist humans in industrial environments, particularly for repetitive, dangerous, or precision tasks. Robotics involves design, construction, operation, and use of robots. The fundamental principles and methods needed to create a robotic system include mechanics and kinematics, sensors and perception, and control systems. Robotics is an interdisciplinary field that combines aspects of computer science, engineering, and other disciplines. The benefits of robotics include increasing manufacturing efficiency and consistency, reducing human error and workplace injuries, enabling flexible production for customized products, and optimizing operational costs through automation.",
+      "difficulty": "medium",
+      "origin": "generated",
+      "source_label": "AI-generated for revision - not from a past paper"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the role of Domain-Specific Languages (DSLs) in robotics, and discuss the challenges associated with their implementation, particularly in the context of industrial constraints. Provide examples of DSLs used in robotics and their benefits.\n\n###",
+      "answer_notes": "Domain-Specific Languages (DSLs) in robotics enable domain experts to write code and express concepts in a way that closely aligns with the requirements and constraints of a particular domain or problem space. In robotics, DSLs are used to define and control the behavior of robots, integrate sensors and vision systems, and manage complex systems such as AGVs and drones.\n\nKey characteristics of DSLs in robotics include:",
+      "difficulty": "medium",
+      "origin": "generated",
+      "source_label": "AI-generated for revision - not from a past paper"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following statements correctly describes research?\n\nA series of systematic activities undertaken to find a solution to a problem\nThe process of designing and developing a software solution\nAn intellectual inquiry or quest towards truth\nAims to enhance existing knowledge\n\nl, ii, iii and iv\ni, ii, and iii\ni, iii and iv\nii and iv\nGiven the list of stages below, which of the following is the correct sequence for\nconducting research?\n\nIdentifying the problem\nDetermine the research strategy\nData collection and analysis\nReview relevant literature\nDraft research questions, objectives, and hypotheses\n\nl, ii, iv, v, iii\ni, v, iv, ii, iii\nl, iii, iv, ii, v\nWhich best defines the research process?\n\nThe researcher's plan of action to be followed when collecting data\nA method of collecting research data\nThe steps the researcher follows in carrying out a research project\nThe account of a study the researcher will write for publication\nWhich activity should be done first?\n\nDeveloping a research proposal\nFormulating a research question\nDeciding on the data analysis procedure\nPerforming data analysis\nPick the option that is not a characteristic of a good research problem\n\nRequires a scientific process of enquiry\nA researchable problem includes the collection and analysis of data\nMultiple outcomes are possible\nThe solution is easily achieved\nA clearly defined research problem helps the researcher to\n\nProvide details of where the problem is occurring\nFormulate a research question and objectives\nDevelop a conceptual framework\nBecome familiar with the types of methodologies followed by other\nresearchers\n\nl, ii\nii, iv\niii, iv\nRESK401 Supplementary Exam - 2023",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "The literature review assists the researcher in\n\nFormulating a research question and objectives\nDetermining the research strategy\nUnderstanding the state-of-the-art of an area\nWriting the research proposal\nWhat is the function of a literature review?\n\nProvide a theoretical background to the study\nIdentify a research problem\nProvide reliable research findings\nDemonstrate the use of online databases\nA literature review helps to\n\nBring clarity and focus to a research problem\nBroaden the researcher's knowledge base in a research area\nUnderstand the recent research methodologies\nAll options",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following statements are correct?\n\nA set of research objectives are derived from the research question\nA hypothesis is a statement that cannot be proven to be true\nThe hypothesis is developed, and then the research tests it\nThe research question is derived from a set of research objectives\n\nI ii\nl, iii\nii, ii'\nii, iv",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "1 .Which of the following serves as a framework for the rest of the research study?\n\nLiterature review\nResearch question\nResearch proposal\nProblem identification",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following does not describe research strategy?\n\nDetermines how data will be collected and analysed\nA plan containing methodological components to ensure that the\nobjectives can be achieved\nThe guiding philosophy in formulating results\nMakes a case for the need for this study",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "n data collection, which of the following best describes a primary source?\n\ndata that is collected for the first time\nonline databases\ndata in the form of reports\ndata that has already been analysed",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which is used more often in quantitative analysis?\n\ninterviews\nclosed questions\nobservations\nfocus-groups\nRESK401 Semester 12023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following least applies to sampling?\n\nSelecting a small number of items from a much larger group\nThe entire population is included in the research\nthe research results are generalised to the population\nthe sample is an accurate representation of the whole population",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following skills are needed to write a good research proposal?\n\nQuantitative skills\nScientific writing and grasp of nomenclature relevant to the field\nSearch engine skills\nCritical thinking\n\nii, ii\ni, iv\nii, iv\nAnswer questions 18 to 28 using Paragraph 1 below:\nParagraph 1:\nFinancial fraud is an ever growing menace with far consequences in the financial\nindustry. Data mining had played an imperative role in the detection of credit card fraud\nin online transactions. Credit card fraud detection, which is a data mining problem,\nbecomes challenging due to two major reasons first, the profiles of normal and\nfraudulent behaviours change constantly and secondly, credit card fraud data sets are\nhighly skewed. The performance of fraud detection in credit card transactions is greatly\naffected by the sampling approach on dataset, selection of variables and detection\ntechnique(s) used. This paper investigates the performance of naive bayes, k-nearest\nneighbor and logistic regression on highly skewed credit card fraud data. Dataset of\ncredit card transactions is sourced from European cardholders containing 284,807\ntransactions. A hybrid technique of under-sampling and oversampling is carried out on\nthe skewed data. The three techniques are applied on the raw and preprocessed data.\nThe work is implemented in Python. The performance of the techniques is evaluated\nbased on accuracy, sensitivity, specificity, precision, Matthews correlation coefficient\nand balanced classification rate. The results shows of optimal accuracy for naive\nbayes, k-nearest neighbor and logistic regression classifiers are 97.92 , 97.69 and",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is the aim of this research:\n\nTo determine if ML can accurately detect credit card fraud\nTo conduct ML experiments to assist the financial industry with credit\ncard fraud detection\nTo determine the best performing ML technique for credit card fraud\ndetection\nTo help the financial industries around the globe with credit card fraud\ndetection",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is the problem of concern?\nA. The changing profile of credit card normal and fraudulent behaviour\nand skewed datasets\nB. Identifying which is the best performing ML technique for credit card\nfraud detection\nC. To predict credit card fraud using ML techniques\nD. Financial industries are at risk of huge financial losses",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is the most likely potential future research following this study?\nA. The integration of the best performing ML technique/s into an decision\nsupport tool for fraud detection\nB. Including more ML techniques in the experiment\nC. Extending the experiment to include more datasets\nD. To collect and analyse the opinions of financial industry practitioners",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which best classifies the research design used in this research?\nA. Case study\nB. Quantitative-experimental\nC. Survey\nD. Applied design science",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Choose the most suitable main research question.\nA. How many ML techniques are needed to accurately detect credit\ncard fraud?\nB. Which is the best performing ML technique for credit card fraud\ndetection?\nC. How can credit card fraud be detected using ML techniques?\nD. Can ML models be used to detect credit card fraud?",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is the major finding of this study?\n\nnaive bayes, k-nearest neighbor and logistic regression performed\nequally well\nK-nearest neighbor is the best ML technique for this problem\nUnder-sampling and oversampling are effective methods for skewed\ndataset\nCredit card fraud detection is possible with ML techniques\nRESK401 Semester 1 2023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which is the most plausible shortcoming of this research?\nA. ML techniques need to be integrated into real-life financial instituitions\nto more precisely measure their effectiveness.\nB. K-nearest neighbour is an outdated ML technique and hyper-\nparameter tuning would have improved results.\nC. Only three ML techniques were used in the experiment.\nD. The research was conducted using Python",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "How was the data collected in order to conduct the experiment? Pick the most\ncorrect answer.\n\nIt is not clearly stated\nAn online dataset/s\nFinancial instituitions database\nFrom banking staff",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "n this study, a comparative analysis was done on what?\nA. Three ML techniques\nB. The data from European cardholders\nC. Features of imbalanced data and skewed dataset\nD. Over-sampling and undersampling methods",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which is the most reliable source of information for your literature review?\n\nTV documentary\nNewspaper article\nA peer-reviewed research article\nAn e-book",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which one of the following is likely to be peer-reviewed?\n\nLecture notes\nJournal article\nPoster\nTextbook\nRESK401 Semester 1 2023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Why is a primary literature source more valuable to a researcher than a secondary\nliterature source?\n\nIt reviews relevant literature\nIt gives general information about a particular topic\nIt contributes new knowledge from research\nIt synthesises the results from several related studies",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p7) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following is one of the characteristics of popular sources of\ninformation?\n\nAuthors include academic affiliations and credentials\nUse of field-specific vocabulary or nomenclature\nLittle to no citations to primary sources of information\nPeer reviewer",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p7) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following sources of information may not have some degree of peer\nreview?\n\nJournal articles\nConference proceedings\nThesis\nOnline magazines",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p7) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which statement is false regarding quantitative research?\n\nRequires many respondents\nUses closed-ended questions\nFocuses on testing theories and hypotheses\nMainly expressed in words",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p7) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following statements about qualitative data is not accurate?\n\nQualitative data is often collected using informal group discussions\nAn example of qualitative data is \"75 of developers use\nThe quality of qualitative data depends to a large extent on the way it\nis interpreted\nThe quality of qualitative data can be affected if one person dominates\nthe group discussion\nRESK401 Semester 1 2023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p7) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following variables cannot be expressed in quantitative terms?\n\nEthnic group\nMarital status\nEconomic status\nProfessional attitude",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p8) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following statements about quantitative data is accurate?\n\nQuantitative data is easy to analyse\nQuantitative data is collected using in-depth interviews\nAn example of quantitative data is \"80 of IT students utilise Visual\nStudio\"\nQuantitative data is collected to find out the reasons for customers'\nbehaviour",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p8) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which is a poorly formulated qualitative question?\n\nHow satisfied are you with provisioned IT labs?\nOn a scale from 1-5, how satisfied are you with provisioned computer\nlaboratories?\nWhat is the most positive aspect of the IT labs\nWhat can be done to improve the IT labs",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p8) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "When is it most appropriate to use a quantitative research approach?\n\nwhen confirming or testing a theory or hypothesis\nwhen trying to understand a concept\nwhen trying to comprehend experiences\nwhen using open-ended questions",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p8) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "When is it most appropriate to use a qualitative research approach?\n\nwhen confirming a theory\nwhen testing a hypothesis\nwhen you want to understand a concept or experiences\nwhen there are many respondents",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p8) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which research strategy would be most appropriate for the development or\nimprovement of an Al algorithm?\n\nCase Study\nDesign research\nA survey\nNone of these options\nRESK401 Semester 1 2023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p8) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following is false about a Survey?\n\nA survey is intended to collect data from a large sample of participants\nThe literature review isa in essencea a type of survey\nA survey is a process of designing and distributing questionnaires to\nparticipants\nA survey can only be done via an online questionnaire",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p9) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "How best would you describe a longitudinal survey?\n\nUsed to collect data relevant at a point in time\nInvolves the collection of data over a long period\nAllows for the researcher to determine the state of affairs at that\nmoment in time\nShort and focused on one aspect of research",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p9) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following is not a type of longitudinal survey?\n\nCensus\nTrend\nPanel\nCohort",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p9) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "A longitudinal survey in which data is collected from the same sample over time\nis called a\n\nPublic opinion poll\nTrend survey\nCohort survey\nPanel survey",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p9) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "A longitudinal survey which shows how participants' opinions change over time is\ncalled a\n\nPublic opinion poll\nTrend survey\nCohort survey\nPanel survey",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p9) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is one of the disadvantages of using surveys?\n\nThe type of responses can be limited by the design or template used\nin the questionnaire\nA wide reach is achievable\nOnline surveys are quick to develop and administer\nThe analysis of collected data is faster due to statistical analysis tools",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p9) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following is false about Design Science research?\n\nIncludes the analysis of the performance of the new artefact through\nits use\nAims to create new knowledge through the design of novel artefacts\nRelies completely on the collection and analysis of data\nAims to improve on a current societal problematic situation",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p9) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following best describes the Evaluation stage of the Design Research\nstrategy?\n\nEnvisioning plans for improvement which can include new elements\nReading of relevant literature and interaction with stakeholders\nPackaging of the new design for patent or marketing\nArtefacts are performance tested using analytical tools",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p10) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following best describes the Awareness of the Problem stage of the\nDesign Research strategy?\n\nEnvisioning plans for improvement which can include new elements\nReading of relevant literature and interaction with stakeholders\nPackaging of the new design for patent or marketing\nArtefacts are performance-tested using analytical tools",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p10) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is a hypothesis?\n\nA variable that must remain constant throughout the research process\nIt involves a systematic literature review\nA proposed explanation for a phenomenon\nThe process of setting up an experiment to measure dependent\nvariables",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p10) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Hypothesis testing is the process of\n\nFormulating true and false hypotheses, which are then tested through\nexperimentation\nCollection and analysis of data and the results will either support or\nreject the hypothesis\nEnsuring that controlled groups have exactly the same intervention as\nexperimental groups\nConducting qualitative research",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p10) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following are valid variables in an experiment?\n\nIndependent variable\nDependent variable\nControlled variable\nAll options",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p10) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which statement best describes a controlled variable?\n\nMust remain constant throughout the process\nChanged or manipulated by the researcher\nMay easily be adversely affected by other factors\nIs the centre of attention during an experiment",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p10) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following is a poor example of a hypothesis?\n\nAgile programmers are more productive in open-plan offices\nWhich UX design is best suited for mobile apps\nA convolutional neural network is the most accurate algorithm for\nvisual analysis of crop disease\nRESK401 Semester 1 2023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p10) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following is not a type of experiment?\n\npre\nQuasi\nExploratory\nTrue",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p11) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following is not a type of Case study?\n\nExploratory\nDescriptive\nExplanatory\nConfirmatory",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p11) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Select the independent variable in the following hypothesis: \"IT students will\nperform better in programming tests when using Phyton\"\n\nIT students\nphyton\nTest marks\nProgramming tests",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p11) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Select the dependent variable in the following hypothesis: \"IT students will perform\nbetter in programming tests when using Python\"\n\nIT students\nPython\nTest marks\nProgramming tests",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p11) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which is not a good approach to conducting an experiment for the following\nhypothesis?: \"IT students will perform better in programming tests when using\npythOn\"\n\nPerform pre-testing and post-testing of the same group of IT students\nDivide the IT students into two groups; one group will use Python, and\nthe other will use other languages\nPerform post-testing of the same group of IT students\nDivide the IT students into two groups; one group will use Python, and\nthe other will use other languages; there will be pre-testing and post-\ntesting of both groups",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p11) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "When conducting an experiment, the dependent variable is\nindependent variable is\nwhile the\n\nManipulated; measured\nControlled; measured\nMeasured; manipulated\nControlled; manipulated",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p11) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "The researcher wants to survey software developers who have experience with a\ncertain developer platform. She sets inclusion criteria to at least 6 months of\nexperience and disregards those interested in using and training to use the\nplatform. Choose the most correct sampling error.\n\nSample frame error\nSelection error\nConfidence level error\nPopulation-specific error\nRESK401 Semester 1 2023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p11) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following is an example of purposive sampling?\n\nA sample of PhD students working in the area of Machine Learning\nWhen the researcher does not consider whether the sample\naccurately represents the population\nPeople who have many friends are more likely to be recruited into the\nsample\nWhere a research team is seeking opinions about gaming consoles\namong various age groups",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p12) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "When the sample size is increased, the impact on sampling is\n\nThe confidence level will increase\nThere will be no impact\nThe amount of sampling error will be reduced\nThe sample mean will be closer to the population mean",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p12) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which statement is false?\n\nIncreasing the sample size will reduce the size of the sampling error\nThere is no way to prevent sampling error except a census of the\nentire population\nSampling error will occur because the population mean is different to\nthe sample mean\nSampling error is a normal occurrence, and researchers need to\ndeclare it as a z-value",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p12) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following is most likely an example of a non-sampling error?\n\nTwo researchers sampled students to find their preferred social media\nplatform. They use the same methods and randomly select a sample.\nThe first researcher finds that 45 prefer WhattheHeck, but the\nsecond finds that 51 prefer WhattheHeck.\nTwo researchers setup an online survey to collect responses in\nrelation to the usability features of WhattheHeck. The survey can not\nbe loaded on iPhones and iPads.\nA researcher developed an app for students to record responses for\ntheir preferred SRC candidate before the election. One of the\ncandidates' names is missing from the app.\nA researcher interviews students to determine their level of\nsatisfaction with library services. He uses pure random sampling",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p12) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "An interview was conducted with highly satisfied users with a new software system\nfeature. What type of sample error is this?\n\nNon-response error\nSelection error\nConvenience error\nPopulation-specific error",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p12) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is the most likely initiative a researcher can use to mitigate the effects of\nnon-response sampling error?\n\nIntroduce an incentive\nStratify the population\nEnsure the sample mean matches the population mean\nImprove the quality of the questionnaire\nRESK401 Semester 12023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p12) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which is the most likely example of a sample frame error?\n\nA study was conducted to determine which programming language\ndevelopers prefer. Software developers from Microsoft were used as\nthe sample.\nA software company conducts research on the usability of a newly\ninstalled delivery and deployment platform. All developers who used\nthe platform were used as the sample.\nA University wants to determine staff preference for online\ncollaboration tools. 10 staff members were randomly selected and\nasked about their preferences.\nA lecturer wants to determine the quality of their teaching materials.\nAll students in her class were asked to complete a survey",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p13) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What sampling error is most likely to occur when using the snowball sampling\ntechnique?\n\nNon-response error\nSelection error\nConvenience error\nPopulation-specific error",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p13) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "\"Place the following IT student skills in order of importance: Maths; critical\nthinking; programming; team player. Which best describes this type of question\nwhen collecting data?\n\nMultiple choice\nClosed\nOrdinal scale\nRating scale",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p13) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which data collection method is best suited to a smaller number of participants;\n\"how\" and \"why\" type questions and seeking in-depth responses?\n\nCase study\nFocus group\nObservation\nSurvey",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p13) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which software would be best suited for creating an online questionnaire?\n\nEndNote\nSurveyMonkey\nGoogle sheets\nMendeley",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p13) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "A study aims to determine the software engineering project team factors that are\nconsidered most important for successfully implementing an online learning\nmanagement system in a University. Which is the most appropriate data\ncollection method for this study?\n\nInterview\nSurvey\nLiterature review\nCase study\nRESK401 Semester 1 2023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p13) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "A study aims to determine students' perspective on the Ul design of a\nuniversity's newly implemented online learning management system. Which is\nthe most appropriate data collection method for this study?\n\nInterview\nSurvey\nFocus group\nOnline dataset",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p14) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which is the most likely research objective that will utilise an online dataset?\n\nTo determine student perspectives\nTo compare the performance of different machine learning\ntechniques\nTo generalise the findings of the sample to the population\nTo capture images of leaves for an image-processing experiment",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p14) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which is an example of a repository for online datasets?\n\nGoogle database\nMicrosoft Learn\nTwitter\nKaggle",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p14) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which statement is not an advantage of using an online dataset?\nA. Avoids the time-consuming and costly activities of collecting data\nB. Avoids transcribing data\nC. Avoids tidying up data and ethics approval.\nD. Cleaning of datasets is optional",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p14) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is the term for the statistical technique used to measure the strength and\ndirection of a relationship between two variables?\nA. Analysis of variance\nB. Regression analysis\nRESK401 Semester 12023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p14) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is the term for identifying patterns and relationships in data?\nA. Data collection\nB. Data coding\nC. Data analysis\nD. Data visualisation",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p15) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is the term for the measure of the degree of association between two\nvariables?\n\nMean\nMedian\nMode\nCorrelation",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p15) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What is the term for the measure of the spread of data in a data set?\n\nMean\nMedian\nMode\nStandard deviation",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p15) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which best describes data analysis?\nA. Pre-processing, transcribing and modelling data\nB. Converting images to digital format\nC. Downloading an online dataset; identifying and extracting factors\nD. All options",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p15) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "An automated warehouse management system utilises image recognition,\nbarcode readers and IoT movement sensors. What type of data is this?\n\nSemi-structured\nUnstructured\nStructured\nHybrid\nRESK401 Semester 12023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p15) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "A study aims to determine the most frequently used terms by IT students by\nanalysing their chats in the virtual learning environment. Which is the most\nappropriate method for this?\n\nTranscribing\nDescriptive statistics\nAxial coding\nContent analysis",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p16) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What are the most correct sequence of steps for grounded theory\nmethodology?",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p16) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "A. transcribe data; arrange data; data coding; validate data\nB. collect data; axial coding; open coding\nC. arrange data; transcribe data; data coding\nD. collect data; validate data; arrange data; selective coding\nWhich is a suitable tool for managing the qualitative data analysis process?\nA. EndNote\nB. Mathlab\nC. Nvivo\nD. Stata\nWhich is a suitable tool for managing the quantitative data analysis process?\nA. Atlas-Ti\nC. Nvivo\nD. PowerHeda\nA graph line's gradient (slope) can take on a value in the range -3;",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p16) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which best describes this type of data?\nA. Ratio\nB. Interval\nC. Ordinal\nD. Nominal",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p16) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "The lecturer analyses the final marks to determine how many students scored\ndistinctions. Which best describes this type of data?\nA. Ratio\nB. Interval\nC. Ordinal\nD. Nominal",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p16) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "A questionnaire requires demographic details for race/ethnic group. Which\nbest describes this type of data?\n\nRatio\nInterval\nOrdinal\nNominal",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p16) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "A study aims to determine how many IT first-year students have done\ncomputing-related subjects in high school. Which best describes this type of\ndata?\n\nRatio\nInterval\nOrdinal\nNominal\nRESK401 Semester 1 2023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p16) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Ethical issues are important in IT research because it\n\nhelps the student pass the assignment\nprovides a guide for how researchers should interact with people\nassists the researcher in writing up their findings\nindicates that all people are very sensitive\nWhich best describes an ethics committee in a university? A group of\nacademics who\n\nAre experts in their fields of research\nThink about hypothetical research\nWill consider a research proposal and the degree to which ethical\nissues have been catered for\nAre useful to draw on when writing a proposal as a mentor",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p17) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which statement is FALSE regarding research ethics?\n\nPreserving the dignity, rights and welfare of research participants\nEnsuring ethical research conduct and behaviour of the researcher\nThe truthfulness of data collection and subsequent results\nDeveloping a research topic and a plan for the research undertaking",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p17) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Why is it important that personal data about research participants are kept\nwithin secure, confidential records?\n\nSo that the participants cannot find out what has been written about\nthem\nIn case individuals, places, or organisations can be harmed through\nidentification or disclosure of personal information\nSo that government officials and other people in authority can have\neasy access to the data\nTo enable the researcher to track down individuals and find out more\nabout their lives",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p17) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following is the most appropriate use of plagiarism detection\nsoftware?\n\nManaging citations and producing a reference list\nComparison or similarity index to check for originality\nAdded features to help improve writing\nTo help the researcher in writing the literature review\nRESK401 Semester 12023 Supplementary",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p17) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which of the following best describes fabrication of results?\n\nChanging or leaving out results in order to achieve the research\nobjectives\nAct of taking someone else's work or ideas and using them as your\nown\nAct of insertion or modifying data when conducting fieldwork or\nexperiments\nIt is a form of stealing\nWhich of the following best describes falsification of results?\n\nAct of taking someone else's word or ideas and using them as your\nown\nAct of including or modifying data that never occurred when\nconducting fieldwork or experiments\nIt is a form of stealing\nChanging or leaving out results in order to achieve the research\nobjectives\nPlagiarism detection software checks for plagiarism and reports this via\n\nSimilarity index\nCitation index\nContent index\nWord count\nWhile conducting research that the DUT ethics committee has approved, two\nparticipants object to answering some questions which they considered to be too\npersonal. As a result, they decide that they want to cease participating in the\nresearch. What are their responsibilities in this case?\n\nTo complete the session because personal questions are important\nfor the research\nTo explain to you why they wish to leave so that you can conduct a\ndebriefing session\nThe participants have no responsibilities, and they can leave at any\ntime\nTo report their grievances to DUT ethics committee",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p18) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Which statement is TRUE regarding research ethics?\n\nRelevant in experimental research\nRelevant in design research\nMore relevant in experimental research than in survey research\nFabricating, falsifying or misrepresenting research data is not ethical\nbehaviour",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - RESK301 (p19) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "301\nThis type of research aims to look at how things are now and not pay attention",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - RESK301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "to any trends.\n\nExplanatory research\nDescriptive research\nCross-sectional research\nLongitudinal research\nThe following statement is true about the research problem\na. The research problem can be replaced by the hypothesis\nb. The research problem answers \"why or how\" questions\nc. The research problem answers \"what\" questions\nd. Is the statement that identifies what you intend to investigate",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - RESK301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "Why is referencing so important?\na. TO discredit the original author's credit for their ideas and work\nb. To validate your arguments, statements and claims\nc. To paraphrase the statement and express ideas and thoughts\nd. To use an idea of another researcher",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - RESK301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "The type of survey that can be used to show how employees' opinions about\nworking from home changed from the COVID-19 period up to date.\n 2 \na. Cross-sectional survey\nb. Panel survey\nc. Cohort Survey\nd. Trend survey",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - RESK301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "This is the type of sampling that is useful when the research requires unique\ncharacteristics of the sample and there are few available or difficult to reach\nparticipants.\na. Expert sampling\nb. Snowball sampling\nc. Purposive sampling\nd. Cluster sampling",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - RESK301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "22 \nThe entire question 3 is based on the following abstract:\nAbstract\nPlant diseases affect the growth of their respective species, therefore their early identification is very\nimportant. Many Machine Learning (ML) models have been employed for the detection and\nclassification of plant diseases. However, after the advancements in a subset of ML, that is, Deep\nLearning (DL), this area of research appears to have great potential in terms of increased accuracy.\nMany developed/modified DL architectures are implemented along with several visualization techniques\nto detect and classify the symptoms of plant diseases. Moreover, several performance metrics are used\nfor the evaluation of these architectures/techniques. This review provides a comprehensive explanation\nof DL models used to visualize various plant diseases. In addition, some research gaps are identified\nfrom which to obtain greater transparency for detecting diseases in plants, even before their symptoms\nappear clearly",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - RESK301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What does this study aim to achieve?\nWhat is the research problem of this study?\nExplain the methodology used in this study.\nIdentify and explain the evaluation metric used in this study.\nDoes this study need to consider any research ethical clearance?\nWhat is the main contribution of this study?\nWhy are there no citations in this abstract?",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - RESK301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "clearly defined\na. Explanatory research\nb. Descriptive research\nc. Exploratory research\nd. Longitudinal research\n 2 \nOne of the following statements is not the reason to review the literature 2 \na. To understand the state-of-the-art\nb. To understand what work has already been done\nc. To prevent setting up research for problems that have already been\nsolved\nd. To identify findings",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Supp - RESK301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "The type of survey that is used when the participants are selected for the sample\nusing certain selection criteria.\na. Cross-sectional survey\nb. Panel survey\nc. Cohort Survey\nd. Trend survey",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Supp - RESK301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "This type of sampling is used when the population is small or when there are no\nknown characteristics of the population. ?\na. Simple random sampling\nb. Quota sampling\nc. Snowball sampling\nd. Purposive sampling\n 2",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Supp - RESK301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "This type of sampling Involves the selection of experts or those who demonstrate\nprofound knowledge in the area of interest.\na. Expert sampling\nb. Quota sampling\nc. Stratified sampling\nd. Purposive sampling",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Supp - RESK301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "RESK301",
+      "prompt": "What would be the most appropriate research method for this work\nMention the portals used to identify the relevant articles\nWhat is the contribution of this study?\nWhat is the research problem for this study?\nBased on the abstract, what would be the potential topic for this study?",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Supp - RESK301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "is an occupation one follows in which one professes to be skilled in.\na. Practice\nb. Apprentice\nc. Profession\nd. Professional\ne. Practitioner\nFrom the recommended textbook for social, and professional issues- Juan is a private\nconsultant. His job is to evaluate automation and needs and recommend suitable systems.\nRecently he was hired by a hospital to upgrade their systems. He suggested (with reasons)\nTri-Star as the best system to upgrade. However, he failed to mention that he is a partner\nin Tri-Star and that there is a conflict of interest. Should he have declined the job?\na. True\nb. False\nCopyright Act is granted for a period of how many years in South Africa.\na. I()yrs\nb. 30yrs\nc. 40yrs\nd. 50yrs\ne. 60yrs\nThe term Cybersquatting is defined as?\na. Someone registers an internet domain name in bad faith, intending to profit from\nthe good name of trademarks. -\nb. Freedom to use, study, modify, and share software.\nc. Publicly licensed standards allow different hardware/software vendors to make\ninteroperable products.\nd. As a software ofwhich the source code is publicly available. Its copyright holder\nallows people to study, modify, and (re)distribute the code to anyone.\nA is a person who holds a legal or ethical relationship of trust with one or more other\nparties (person or group of persons)",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Big Brothers seek to regulate the interaction of certain communications, monitoring\nspecific signals and radio frequency spectrums and providing certain communication-\nrelated information.\nSelect true or false.\na. True\nb. False\nWho amongst this category of employees from our class spent 50-90 in",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "It is 1980, and Bingo software has just developed a new operating system called BOS.\nBOS is better than anything else, but Bingo is a small firm that needs venture capital.\nAfter three years bringing the product to the market, it launched and sold well for a year.\nAt this point, it has recovered about 25 of its initial investments. Pirate Pete entered the\nmarket with PPOS, which is cheaper and has more features than BOS but it appears to\nbe a copied or slightly modified version of BOS. In addition to this, copying of BOS is\nrampant with customers making copies. Bingo did not last long and went bankrupt within\na year.\nHas PPOS wronged Bingo?\nSelect true or false.\na. True\nb. False",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "360.org, an organization working toward curbing climate change, recently interviewed\nJessica for the position of public relations officer. However, interviewers Brenda and\nLaura are divided over whether Jessica should be given the job. Brenda believes that\nJessica does not have in-depth knowledge about the issue of global warming and its\nimpact. On the other hand, Laura feels that Jessica would be perfect for the job because\nshe has vital networking and interpersonal skills. Which of the following, if true, would\nweaken Laura's argument? Select the correct option.\na. Jessica could not fare well in the written test, which analyzed her conceptual skills.\nb. Jessica listened intently to the interviewers' questions before answering them.\nc. Jessica could not clearly communicate why she was right for the job.\nd. Jessica was very friendly and courteous with the receptionist while greeting her",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Which ofthe following is not listed among the ten ways of improving your listening habit\nfrom the lecture note?\n\nSpeaking and not listening\nStart by stopping.\nConfused and asked questions.\nTry to emphasize with the senders' team",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "What section of the RICA allows a party to a communication to monitor and intercept the\ncommunication if he/she is a party to the transmission (for example, where the\nparticipants in a meeting consent to the meeting being recorded).\n\ne.\nf.\nSection 1\nSection 2\nSection 3\nSection 4\nSection 5\nSection 6",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "The\nsets conditions for how you can process.\ninformation. It has been signed by the President and is law and is run by the \"Information\nRegulator\".\na. Protection of Public Information Act\nb. Protection of Asset Act\nc. Protection of Probability Act\nd. Protection of Personal Information Act",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "From the recommended textbook, the EU Global Data Protection Regulation (GDPR) was\napproved in what month and year?\na. May 2016\nb. June 2016\nc. April 2016\nd. February 2016",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Half of the responding companies reported that they take writing into consideration when\nhiring professional employees.\nSelect true or false.\na. True\nb. False",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "What is another name for sustainable computing?\na. Purple computing\nb. Green computing\nc. Red computing\nd. Black computing",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "From the textbook: Rajesh invests small amounts on the stock market. Last year he\nbought and successfully employed a software package to help him with his investments.\nRecently, he met Fundiswa, who was also interested in using the software. Fundiswa\nborrowed the box, copied it, and then returned it. Both vaguely knew the software was\nproprietary but did not read the details. Should the software package have been lent?\nSelect true or false.\na. True\nb. False",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p7) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "List and explain the three strategies for approaching computer ethic issue\n\nDescribe professional bodies' codes of conduct and practice in social and professional\nissues (IO Marks)\nDifferentiate between Globalization, Localization\n\nIn the lecture note, draw and outline the five levels of the pyramid architecture ofa\ncyber-physical system-enabled manufacturing system",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Main - SPRI301 (p8) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Should a company mine data? Consider the case where Tisetso sells hardware and\nsoftware to over 100 000 customers annually. She has ten years of experience. As part of\nthe billing process, she keeps information on customers. She buys and uses a data mining\ntool to derive useful information about her client's information, such as postal codes,\ncredit card numbers, ID numbers, etc. Most of this information identifies groups and not\nindividuals. She can then use the information to market her wares more efficiently. Is this\nethical since the customer did not give her the information for this purpose?\na. True\nb. False\nData mining is a process of ----?\na. exploitation and analysis of large cargoes\nb. exportation and research of multiple cash\nc. exploration and analysis of large quantities of data\nAutomated reasoning is a way to infer implicit knowledge from explicitly represented\ninformation using the rules of inference, a logic in which the information is described,\nand a set of algorithms that automate and scale up this process on the computer.\nSelect true or false.\na. True\nb. False\nA database is a structured collection of data stored in a text file such that it facilitates easy\nmanipulation and retrieval of that data by a ------------system.\na. Project management system\nb. Cobol base management system\nc. Database Management system\nd. Legal base management system\nProfessional codes of conduct are some of the formal guidelines for----------\na. Association behavior\nb. Ethical decision\nc. Weigh up an argument.\nd. Legal issues\nFrom the recommended textbook in social professional issues, one of the following\nprofessional bodies were not mentioned. Select the correct answer:\na. Association of engineering computing\nb. Association of computing machinery\nc. Ubuntu leadership code of conduct",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - SPRI301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "What is Utilitarianism?\na. Egoism focuses on self-interest. \"Does the action benefit me, as an individual, in any way\nb. Altruists choose to align their well-being with others so they are happy when others\nthrive and sad when others are suffering.\nc. The principle of Utilitarianism embodies the notion of operating in the public interest\nrather than for personal benefit",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - SPRI301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "The 1797 principle state that only by following that maxim through which you can at the\nsame time will it become a universal law. \") \"For an action to be morally valid, the agent or\nperson performing the act must not act unless.\nSelect true or false.\na. True\nb. False\nI l. This Bill of Rights is a cornerstone of democracy in South Africa, and In Information\nTechnology, the rights maybe? Select which of the following is not among the 3 listed in\nclass?\na. The right to know\nb. The right to privacy\nc. The right to pirates\nd. The right to property",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - SPRI301 (p3) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "propagates openness, transparency, and surveillance in human interelationships,\nwhich seems to contradict the notion of individual privacy.\na. Abantu\nb. Mbutu\nc. Umuntu\nd. Ubuntu",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - SPRI301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "The internet is old by computing standards, which commenced in 1769?\nSelect true or false.\na. True\nb. False",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - SPRI301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Regulatory changes and privatisation in what year?\na. 1992\nb. 1990a",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - SPRI301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Is this act ethical by copying copyrighted software to be use as a backup, even when the\ncopyright agreement specifically. prohibits copying for that purpose.\nSelect true or false.\na. Legal",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - SPRI301 (p6) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "explores what people out to do and evaluate arguments, reasoning and theories\na. Computer Ethics\nb. Descriptive statement\nc. Normative statement",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - SPRI301 (p7) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Explain the following terms:\na. Morality\nb. Ethics\nc. Information Ethics\nd. Cyber-ethics",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - SPRI301 (p8) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Illustrate in a diagram and differentiate between the four basic philosophies of ethic\nspace",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2023 - Midyear Supp - SPRI301 (p8) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "The following fall under emerging technology except Emerging technologies?\nA. artificial intelligence\nB. biotechnology\nC. block chain\nD. None of the above\nA vice is\nA. A habit of unacceptable behaviour.\nB. A branch of philosophy.\nC. One way to determine which activities are \"good\" and which are \"bad.\"\nD. All of the above statements\nFair and just treatment, providing resources and opportunities based on individual and group\nneeds to achieve equal outcomes.\nA. Diversity.\nB. Inclusion.\nC: Equity.\nD. All of the above\nThe following are true about define command theory except\nGood actions are those aligned with God's will\nBad actions are those contrary to God's will\nThe theory is not universally workable\nNone\nWhat term can be used to describe Creating an environment where everyone feels valued,\nrespected, and has a sense of belonging\nDiversity.\nInclusion.\nEquity.\nAll of the above",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - SPRI301 (p2) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "is a habit that inclines people to do what is acceptable\nAre a system of rules, enforced by a set of institutions that tells us what we can and\nrefers fair and just treatment, providing resources and opportunities based on individual\nand group needs to achieve equal outcomes",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - SPRI301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Describe three ways through which biasness occurs during technology development",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - SPRI301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Explain strategies for mitigating bias and discrimination in technology",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - SPRI301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Describe the three pillars of corporate social responsibility",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - SPRI301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "State five reasons why corporate social responsivity is important",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - SPRI301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "Describe any three secondary dimensions of diversity",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - SPRI301 (p4) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "What steps should XYZ Corporation take to identifr and prioritize areas for improvement within\nits manufacturing processes and supply chain?",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - SPRI301 (p5) (OCR - verify)"
+    },
+    {
+      "module_id": "SPRI301",
+      "prompt": "How can XYZ Corporation foster a culture of innovation and sustainability to drive product\ndevelopment and manufacturing practices?",
+      "answer_notes": null,
+      "difficulty": "medium",
+      "origin": "past_paper",
+      "source_label": "2024 - Midyear Main - SPRI301 (p5) (OCR - verify)"
+    }
+  ],
+  "counts_by_module": {
+    "IPRT301": 54,
+    "PBDV301": 8,
+    "RESK301": 99,
+    "SPRI301": 31
+  }
+}
