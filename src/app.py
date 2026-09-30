@@ -29,7 +29,17 @@ import sys
 from flask import Flask, jsonify, request
 
 from .agents import TutoringWorkflow
-from .api import admin_bp, chat_bp, resource_bp, tutor_bp
+from .api import (
+    admin_accounts_bp,
+    admin_bp,
+    auth_bp,
+    chat_bp,
+    content_bp,
+    notification_bp,
+    practice_bp,
+    resource_bp,
+    tutor_bp,
+)
 from .auth import AuthError
 from .config import settings
 from .db import check_connection
@@ -192,9 +202,14 @@ def create_app() -> Flask:
             exc,
         )
 
+    app.register_blueprint(auth_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(admin_accounts_bp)
     app.register_blueprint(tutor_bp)
+    app.register_blueprint(practice_bp)
+    app.register_blueprint(notification_bp)
+    app.register_blueprint(content_bp)
     app.register_blueprint(resource_bp)
     _register_meta_routes(app)
     _register_error_handlers(app)
