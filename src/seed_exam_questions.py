@@ -23,6 +23,7 @@ without touching the database.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import re
 import sys
@@ -49,7 +50,7 @@ MODULE_ALIASES = {
 #: about punctuation, and rejecting a real question over a stray colon would
 #: discard most of the corpus.
 _Q_START = re.compile(
-    r"^\s*(?:question\s*|q\.?\s*)?(\d{1,2}(?:\.\d{1,2})?)\s*[.):;\-]?\s+(\S.{2,})$",
+    r"^\s*(?:question\s*|q\.?\s*)?(\d{1,2}(?:\.\d{1,2})?)\s*[.):;\-]?\s*(.*)$",
     re.IGNORECASE,
 )
 #: Trailing or bracketed mark allocation: "[6]", "(12 marks)", "[6 M]"
@@ -67,11 +68,71 @@ _CLEAN = re.compile(r"[^A-Za-z0-9 ,.:;()'\"?!/=\-\n]+")
 #: A run of bare option letters, which is what a two-column MCQ page reduces to
 #: once OCR has separated the numbering column from the question column.
 _BARE_OPTIONS = re.compile(r"^[\sA-Da-d.,]{0,60}$")
-#: Two or more consecutive sub-item numbers ("1.1. 1.2. 1.3.") or option runs
-#: ("A. B. C. D.") inside one block. On these scans this is the signature of a
-#: column that OCR read without its question stems, so the block is column
-#: debris rather than a question.
-_OPTION_RUN = re.compile(r"(?:[A-D]\.\s*){3,}")
+#: A number alone on its own line: "1." with no text after it. Several of these
+#: in one block means OCR read the numbering column without the questions beside
+#: it, so the block is a section header followed by a list whose items cannot be
+#: paired with their text. It cannot be split into individual questions, and
+#: stored whole it reads as one incoherent prompt.
+_ORPHAN_NUMBERING = re.compile(r"^\s*\d{1,2}\.\s*$", re.MULTILINE)
+#: Page furniture that OCR picks up along with the question: the footer code
+#: ("IPRT301/2023/Main/Paper"), page numbers and running heads.
+_FURNITURE = re.compile(
+    r"[A-Z]{2,4}\d{3}/\d{4}/[A-Za-z]+(?:/[A-Za-z]+)*"
+    r"|\bpage\s+\d+\s+of\s+\d+\b"
+    r"|\bquestion\s+paper\s*$",
+    re.IGNORECASE,
+)
+#: How many orphan numbers are tolerated before a block is treated as debris.
+MAX_ORPHAN_NUMBERS = 2
+#: A mark allocation that lost its brackets: "8 marks", "marksl" (OCR of a run-in
+#: "marks 1." beside a sub-item number), "mar ks". The alternatives are spelled
+#: out rather than written as "mar?k\w*" because that would also swallow the
+#: first two letters of an ordinary word, and "market" would read as an
+#: allocation.
+_MARKS_LOOSE = re.compile(
+    r"^\s*(?:(\d{1,3})\s*)?mar?k(?:ks|s|sl|s1|l|1)?\b\s*[:.\-–]?\s*", re.I
+)
+#: A line holding nothing but an enumeration token - an option letter, a roman
+#: numeral, a number, with or without its dot. A line like that is always layout,
+#: never content. Multiple-choice pages are laid out with the option letters in
+#: their own column, so OCR returns the stem followed by "A. B. c. D." with the
+#: option text in a third column; the stem itself is intact and answerable, so
+#: the orphans are dropped rather than the whole question being rejected.
+_ORPHAN_TOKEN_LINE = re.compile(
+    r"^[ \t]*(?:[A-Da-d][.)]|[ivxIVX]{1,4}[.)]|\d{1,2}[.)]|[A-Da-d])[ \t]*$",
+    re.MULTILINE,
+)
+#: The same token left at the front of a prompt, often behind a conjunction the
+#: previous block ended on: "and 3. Which best describes this type of data?".
+_LEADING_ENUM = re.compile(
+    r"^\s*(?:(?:and|or|then|also|plus)\b[\s,]*)?"
+    r"(?:\d{1,2}[.):]|[ivx]{1,4}[.)])\s+",
+    re.IGNORECASE,
+)
+#: Sub-item numbering, which marks a fill-in-the-blank or multi-part block whose
+#: individual stems OCR could not pair with their numbers.
+_SUBITEM_ANY = re.compile(r"\b\d{1,2}\.\d{1,2}\.\s*\n", re.MULTILINE)
+#: Trailing allocation: "( 6 marks)" or a bare "120 Marks" run onto the next
+#: section's heading.
+_MARKS_TRAILING = re.compile(
+    r"\s*(?:go\s*)?[\(\[]?\s*\d{0,3}\s*mar?k(?:ks|s|sl|s1|l|1)?\s*[\)\]]?\s*$",
+    re.I,
+)
+#: A run-on into the next question heading, which OCR appends rather than breaks.
+#: The lookbehind matters: a heading at the *start* of a block is the label for
+#: the question that follows it ("marks\nQuestion 3. Explain the difference...")
+#: and cutting there would delete the question itself.
+_SECTION_TAIL = re.compile(r"(?<=\S)\n+\s*Question\s+\d+\s*[:.].*\Z", re.I | re.S)
+#: The same heading, but at the front of a block, where it is a label to drop.
+_LEADING_HEADING = re.compile(r"^\s*Question\s+\d+\s*[:.]\s*", re.I)
+#: Two or more consecutive sub-item numbers ("1.1. 1.2. 1.3.") inside one block.
+#: On these scans this is the signature of a column that OCR read without its
+#: question stems, so the block is column debris rather than a question.
+#:
+#: This used to cover option runs too ("A. B. C. D."). That rejected whole
+#: multiple-choice questions whose stem had in fact survived, which is most of
+#: the RESK papers. Detached option letters are now stripped in
+#: ``_clean_question_body`` instead, so the stem is kept.
 _SUBITEM_RUN = re.compile(r"(?:\b\d{1,2}\.\d{1,2}\.?\s+){3,}")
 
 MIN_CHARS = 40
@@ -194,9 +255,7 @@ def _ocr_windows(image_paths: Iterable[Path]) -> dict[int, str]:
     Paths go in and results come out as JSON *files*: argv binding silently kept
     only the first path, and stdout mangled the multi-line result.
     """
-    import json
     import subprocess
-    import tempfile
 
     paths = [str(p) for p in image_paths]
     if not paths:
@@ -234,9 +293,51 @@ def _ocr_windows(image_paths: Iterable[Path]) -> dict[int, str]:
     return {i: (t or "") for i, t in enumerate(data)}
 
 
-def ocr_pdf(path: Path, *, dpi: int = 200, workdir: Optional[Path] = None) -> dict[int, str]:
-    """Rasterise and OCR a PDF. Returns ``{page_index: text}``."""
+#: OCR is by far the slowest part of extraction - minutes per paper on CPU - and
+#: the question parser changes far more often than the papers do. Caching the
+#: per-page text keyed by the file's content hash makes a parser change a
+#: re-parse of local JSON instead of a fresh OCR of the whole folder.
+DEFAULT_CACHE_DIR = Path(__file__).resolve().parent.parent / "exam_papers" / ".ocr-cache"
+
+
+def _cache_key(path: Path, dpi: int) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    digest.update(str(dpi).encode())
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()[:24]
+
+
+def ocr_pdf(
+    path: Path,
+    *,
+    dpi: int = 200,
+    workdir: Optional[Path] = None,
+    cache_dir: Optional[Path] = DEFAULT_CACHE_DIR,
+) -> dict[int, str]:
+    """Rasterise and OCR a PDF. Returns ``{page_index: text}``.
+
+    Cached under ``cache_dir`` by content hash, so an unchanged paper is only
+    ever OCR'd once. The cache is disposable; delete the directory to force a
+    clean re-read.
+    """
     import pymupdf
+
+    cache_file = None
+    if cache_dir is not None:
+        cache_dir = Path(cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / f"{_cache_key(path, dpi)}.json"
+        if cache_file.exists():
+            try:
+                cached = json.loads(cache_file.read_text(encoding="utf-8"))
+                logger.info("OCR cache hit for %s (%d page(s))", path.name, len(cached))
+                return {int(k): v for k, v in cached.items()}
+            except (json.JSONDecodeError, OSError, ValueError):
+                logger.warning("Ignoring unreadable OCR cache %s", cache_file)
 
     tmp = workdir or Path(tempfile.mkdtemp(prefix="examocr_"))
     tmp.mkdir(parents=True, exist_ok=True)
@@ -248,7 +349,27 @@ def ocr_pdf(path: Path, *, dpi: int = 200, workdir: Optional[Path] = None) -> di
             pix.save(str(img))
             images.append(img)
     logger.info("Rasterised %d page(s) from %s at %d dpi", len(images), path.name, dpi)
-    return _ocr_windows(images)
+    pages = _ocr_windows(images)
+
+    if cache_file is not None and pages:
+        try:
+            cache_file.write_text(json.dumps(pages), encoding="utf-8")
+            logger.info("Cached OCR for %s -> %s", path.name, cache_file.name)
+        except OSError as exc:
+            logger.warning("Could not cache OCR for %s: %s", path.name, exc)
+
+    # The rasterised pages were only needed to feed the OCR engine.
+    for img in images:
+        try:
+            img.unlink()
+        except OSError:
+            pass
+    try:
+        tmp.rmdir()
+    except OSError:
+        pass
+
+    return pages
 
 
 # ---------------------------------------------------------------------------
@@ -268,18 +389,30 @@ def pretty_paper_name(stem: str) -> str:
     -> ``2023 Midyear Main - IPRT301``."""
     stem = stem.replace("_", " ").strip()
     upper = stem.upper()
-    for token in MODULE_ALIASES:
-        if token in upper:
-            year = stem[:4] if stem[:4].isdigit() else ""
-            tail = upper.split("QP", 1)[-1].strip() if "QP" in upper else upper
-            kind = ""
-            for word in ("MIDYEAR MAIN", "MIDYEAR SUPP", "FEBRUARY SPECIAL", "SPECIAL", "SUPP", "MAIN"):
-                if word in tail:
-                    kind = word.title()
-                    break
-            bits = [b for b in (year, kind, token) if b]
-            return " - ".join(bits) if bits else stem
-    return stem
+    module_id = module_for(stem)
+    if module_id is None:
+        return stem
+
+    year = stem[:4] if stem[:4].isdigit() else ""
+
+    # The session keyword sits *before* "QP" in these filenames ("2024 MIDYEAR
+    # MAIN QP ..."), so the whole name has to be searched. Searching only the
+    # part after QP loses it, and every paper then collapses to just
+    # "<year> - <module>" - at which point the 2024 main and the 2024
+    # supplementary are indistinguishable in the bank and a lecturer checking a
+    # question against its paper has no way to tell which one they are looking
+    # at. Order matters: the longer keywords are tested first.
+    kind = ""
+    for word in ("MIDYEAR MAIN", "MIDYEAR SUPP", "FEBRUARY SPECIAL", "SPECIAL", "SUPP", "MAIN"):
+        if word in upper:
+            kind = word.title()
+            break
+
+    # The canonical module id, not the token as it appears on the paper: the
+    # RESK papers are branded RESK401 but the registry calls it RESK301, and
+    # the bank is keyed on the registry.
+    bits = [b for b in (year, kind, module_id) if b]
+    return " - ".join(bits) if bits else stem
 
 
 def _tidy(text: str) -> str:
@@ -292,6 +425,89 @@ def _tidy(text: str) -> str:
 
 def _is_boilerplate(text: str) -> bool:
     return bool(_BOILERPLATE.search(text))
+
+
+def _has_orphan_numbering(text: str) -> bool:
+    """True when a block's numbering was read apart from its questions.
+
+    A paper laid out in numbered columns comes through OCR as the numbers on
+    their own, with the question text they belong to somewhere else entirely.
+    Stored whole, such a block is not a question at all: it is a list of ten
+    true/false statements with no way to tell which number belongs to which,
+    which is worse than leaving it out, because a student would be handed it as
+    a single prompt.
+    """
+    return len(_ORPHAN_NUMBERING.findall(text)) > MAX_ORPHAN_NUMBERS
+
+
+def _is_lost_stem_block(text: str) -> bool:
+    """True for a fill-in-the-blank block whose stems OCR could not recover.
+
+    These arrive as a bare allocation ("marksl") over a list of numbered blanks
+    with fragments of the answers but none of the questions - "2.1. 2.2. cannot
+    do 2.3. is a habit that inclines people...". There is no question text to
+    ask, so the block is dropped rather than served as one nonsensical prompt.
+
+    A leading allocation *with* its number ("8 marks") is different: that is the
+    mark weight of a question that follows it, and the question is kept.
+    """
+    lead = _MARKS_LOOSE.match(text)
+    if lead is None or lead.group(1) is not None:
+        return False
+    return bool(_SUBITEM_ANY.search(text))
+
+
+def _clean_question_body(text: str) -> tuple[str, Optional[int]]:
+    """Strip allocation and furniture from a block. Returns ``(body, marks)``.
+
+    Mark weight is lifted out of the prompt and returned separately wherever it
+    survives - bracketed, or as a bare "8 marks" at the head of the block. What
+    is left behind is the question itself.
+    """
+    body = (text or "").strip()
+    body = _FURNITURE.sub("", body)
+
+    # Leading allocation comes off *before* the run-on cut. A block that opens
+    # "marks\nQuestion 3. Explain ..." is a heading followed by its question, not
+    # a question followed by a run-on, and cutting first would delete the
+    # question. Once the allocation is gone the heading is at the start of the
+    # body, where the lookbehind below correctly refuses to match it.
+    lead = _MARKS_LOOSE.match(body)
+    if lead:
+        body = body[lead.end() :]
+        leading_marks = int(lead.group(1)) if lead.group(1) else None
+    else:
+        leading_marks = None
+
+    body = _SECTION_TAIL.sub("", body)
+    body = _LEADING_HEADING.sub("", body)
+
+    # A multiple-choice stem arrives with its option letters detached, because
+    # the letters sit in their own column and their text is in another. Drop the
+    # orphaned letters and keep the stem - it is still answerable, and rejecting
+    # the block would throw a real question away over formatting.
+    body = _ORPHAN_TOKEN_LINE.sub("", body)
+    # Repeated, because a block can carry more than one ("and 3. ii. Text").
+    previous = None
+    while previous != body:
+        previous = body
+        body = _LEADING_ENUM.sub("", body, count=1).strip()
+
+    marks: Optional[int] = leading_marks
+    bracketed = _MARKS.search(body)
+    if bracketed:
+        marks = marks if marks is not None else int(bracketed.group(1))
+        # Removes every bracketed allocation, not just the first. That is what a
+        # sub-parted question needs - one "(2 marks)" per part - but it means a
+        # loose allocation sitting *behind* them only becomes the last thing on
+        # the block once they are gone. Hence the trailing pass below, which has
+        # to come after this one.
+        body = _MARKS.sub("", body)
+
+    body = _MARKS_TRAILING.sub("", body)
+
+    body = re.sub(r"\n{3,}", "\n\n", body).strip(" \n:-–—.")
+    return body, marks
 
 
 def parse_questions(module_id: str, paper: str, page_texts: dict[int, str]) -> list[ExtractedQuestion]:
@@ -323,19 +539,23 @@ def parse_questions(module_id: str, paper: str, page_texts: dict[int, str]) -> l
                     len(body) >= MIN_CHARS
                     and len(body.split()) >= MIN_WORDS
                     and not _BARE_OPTIONS.match(body)
-                    and not _OPTION_RUN.search(body)
                     and not _SUBITEM_RUN.search(body)
                     and not _is_boilerplate(body)
                     and looks_like_question(body)
+                    and not _has_orphan_numbering(body)
+                    and not _is_lost_stem_block(body)
                 ):
-                    key = body.lower()[:180]
+                    cleaned, marks = _clean_question_body(body)
+                    if len(cleaned) < MIN_CHARS:
+                        current = None
+                        buf = []
+                        return
+                    key = cleaned.lower()[:180]
                     if key not in seen:
                         seen.add(key)
-                        marks = _MARKS.search(body)
-                        current.marks = int(marks.group(1)) if marks else None
-                        current.prompt = _MARKS.sub("", body).strip()
-                        if len(current.prompt) >= MIN_CHARS:
-                            found.append(current)
+                        current.marks = marks
+                        current.prompt = cleaned
+                        found.append(current)
             current = None
             buf = []
 
