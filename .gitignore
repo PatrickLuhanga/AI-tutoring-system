@@ -34,3 +34,9 @@ venv/
 # Evaluation run artefacts: logs and per-turn JSON from eval/run_*_eval.py.
 # The harness and the labelled test set are tracked; a run's output is not.
 eval/results/
+
+# OCR text cached from exam_papers/*.pdf, keyed by file content hash. Derived
+# from tracked PDFs and expensive to produce (minutes per paper on CPU), but
+# machine-specific and large - regenerate by running:
+#   python -m src.seed_exam_questions exam_papers --dry-run
+exam_papers/.ocr-cache/

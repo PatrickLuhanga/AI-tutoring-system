@@ -178,18 +178,50 @@ You should see a JSON payload containing `"name":"qwen3:8b"`.
 Run in order from the project root (venv active):
 
 ```powershell
-python -m src.setup_database      # creates extensions, 9 tables, HNSW indexes, seeds 4 modules + default LLM config
+python -m src.setup_database      # creates extensions, all tables, HNSW indexes, seeds 4 modules + default LLM config
 python -m src.ingest_curriculum   # walks "academic content/", chunks, embeds, stores vectors
 python -m src.ingest_code_patterns  # inserts the 50 Java code-repair patterns
+python -m src.seed_question_bank  # loads the seeded practice question bank
 python -m src.verify_data         # sanity check: row counts + 2 module-filtered similarity searches
 ```
 
-Expected tails: `Tables ensured (9)`, `Seeded 4 modules`,
-`Seeded default LLM configuration (provider=local)`.
+Expected tails: `Tables ensured`, `Seeded 4 modules`,
+`Seeded default LLM configuration (provider=local)`, and from
+`seed_question_bank` either `N inserted` or `0 inserted, N already present`.
+
+> `start-local.ps1` runs `setup_database` and `seed_question_bank` for you, so
+> if you use that script you can skip both here.
 
 > The first `ingest_curriculum` run downloads `all-MiniLM-L6-v2` (~90 MB).
 > The full ingestion over all four modules takes a while — for a quick test use
 > `python -m src.ingest_curriculum --module IPRT --max-files 20`.
+
+### 5.4 The practice question bank
+
+`seed_question_bank` loads `exam_papers/question_bank.json` — 192 questions
+extracted from scanned past papers, plus 8 generated for PBDV301 (which has no
+papers). Without it the Practice view returns nothing on a fresh clone.
+
+It is idempotent: questions already present for a module are left alone, so
+running it repeatedly is safe and it will not undo anything a lecturer has added
+or edited.
+
+```powershell
+python -m src.seed_question_bank            # JSON -> database
+python -m src.seed_question_bank --check    # report drift, write nothing
+python -m src.seed_question_bank --export   # database -> JSON, after editing the bank
+python -m src.seed_question_bank --reset --yes   # empty the table and reload
+```
+
+> `--reset` empties the **whole** `questions` table, including anything a
+> lecturer has written. It cannot tell a seeder row from a hand-written one, and
+> it refuses to run without `--yes`.
+
+> **The past-paper questions were produced by OCR and need proofreading.** The
+> source PDFs are scans, so wording is imperfect and diagrams and code listings
+> are missing entirely — some questions refer to "the diagram below" with nothing
+> below them. Every such row is tagged `(OCR - verify)` in its source label. See
+> `exam_papers/README.md` for the full picture.
 
 ---
 

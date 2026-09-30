@@ -89,7 +89,35 @@ if (-not (Test-Path $ollamaExe)) {
     }
 }
 
-# --- 3. Flask API gateway ----------------------------------------------------
+# --- 3. Schema + question bank ------------------------------------------------
+# The schema is additive (create_all never alters an existing table), so this is
+# safe to run every time. --drop is deliberately not used here.
+Step "Schema"
+
+& $venvPy -m src.setup_database 2>&1 | Out-String | Write-Host
+if ($LASTEXITCODE -eq 0) { Ok "tables ensured" } else { Warn "setup_database exited $LASTEXITCODE - see above" }
+
+# The practice bank is seeded content: without this a fresh clone has an empty
+# bank and Practice returns nothing. Idempotent - questions already present for a
+# module are left alone, so this never duplicates and never overwrites a
+# lecturer's edits. See exam_papers/README.md for provenance and caveats.
+Step "Practice question bank"
+
+$bankFixture = Join-Path $root 'exam_papers\question_bank.json'
+if (-not (Test-Path $bankFixture)) {
+    Warn "no fixture at exam_papers\question_bank.json - Practice will be empty"
+} else {
+    $bankOut = & $venvPy -m src.seed_question_bank 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 0) {
+        ($bankOut -split "`n" | Where-Object { $_ -match 'inserted' }) |
+            ForEach-Object { Ok $_.Trim() }
+    } else {
+        Warn "question bank did not load:"
+        $bankOut | ForEach-Object { Write-Host "        $_" }
+    }
+}
+
+# --- 4. Flask API gateway ----------------------------------------------------
 Step "Flask API gateway (port 5000)"
 
 if (Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue) {
@@ -104,7 +132,7 @@ if (Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyCont
     }
 }
 
-# --- 4. Vite dev server ------------------------------------------------------
+# --- 5. Vite dev server ------------------------------------------------------
 Step "Vite dev server (port 5173)"
 
 if (Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue) {
@@ -124,11 +152,14 @@ if (Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyCont
     Warn "Vite did not come up - check the window for errors"
 }
 
-# --- 5. Summary --------------------------------------------------------------
+# --- 6. Summary --------------------------------------------------------------
 Write-Host "`n========================================================" -ForegroundColor Cyan
 Write-Host "  UI      http://localhost:5173" -ForegroundColor Green
 Write-Host "  API     http://127.0.0.1:5000/api/health" -ForegroundColor Green
 Write-Host "  DB      localhost:5433 (ai_tutoring / tutor_admin)" -ForegroundColor Green
 Write-Host "`n  First load after a Vite start can hang on 'Loading view...'" -ForegroundColor Yellow
 Write-Host "  - just reload the page once. Harmless dev-server quirk." -ForegroundColor Yellow
+Write-Host "`n  Practice questions came from scanned past papers via OCR and are" -ForegroundColor Yellow
+Write-Host "  tagged '(OCR - verify)'. Proofread before relying on them." -ForegroundColor Yellow
+Write-Host "  See exam_papers\README.md." -ForegroundColor Yellow
 Write-Host "========================================================`n" -ForegroundColor Cyan
