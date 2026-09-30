@@ -8,6 +8,59 @@
  */
 
 /** Roles accepted by the chat transcript. */
+/** Roles that can hold a login account. `lecturer` is a superset of `tutor`. */
+export type AccountRole = 'student' | 'tutor' | 'lecturer' | 'admin'
+
+/** The signed-in account, as returned by `/api/auth/me` and the login routes. */
+export interface SessionUser {
+  user_id: number
+  email: string
+  full_name: string | null
+  role: AccountRole
+  status: 'active' | 'suspended'
+  student_number: string | null
+  student_id: number | null
+  is_staff: boolean
+  /** Modules this account may act on. Empty for students and admins. */
+  modules: string[]
+}
+
+export interface AuthResponse {
+  user: SessionUser
+  token: string
+}
+
+/** Public signup policy, so the form can render only the fields that apply. */
+export interface SignupPolicy {
+  allow_self_signup: boolean
+  roles: AccountRole[]
+  student_email_domain: string
+  lecturer_email_domain: string
+  min_password_length: number
+  session_ttl_hours: number
+}
+
+export interface SignupPayload {
+  email: string
+  password: string
+  role: AccountRole
+  full_name?: string
+  /** Students only, and required for them. */
+  student_number?: string
+  /** Tutors and lecturers only. */
+  module_ids?: string[]
+}
+
+/** Roles that can reach the help queue and content tooling. */
+export function isStaff(user: SessionUser | null): boolean {
+  return Boolean(user?.is_staff)
+}
+
+/** Roles that may work the ungrounded-question queue. */
+export function canUseTutorQueue(user: SessionUser | null): boolean {
+  return user?.role === 'tutor' || user?.role === 'lecturer' || user?.role === 'admin'
+}
+
 export type ChatRole = 'user' | 'assistant'
 
 /** A single message in a tutoring session. */

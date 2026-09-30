@@ -30,14 +30,27 @@ const CATEGORY_LABEL: Record<string, string> = {
 export default function Sources({ citations, thirdPartyFallback }: SourcesProps) {
   if (!citations || citations.length === 0) return null
 
+  // Derive the notice from the citations themselves as well as from the flag. The
+  // flag comes from the retriever, but a mismatch used to render a confident
+  // source list with no disclaimer at all - which is exactly the case a student
+  // most needs to be warned about.
+  const anyThirdParty =
+    Boolean(thirdPartyFallback) || citations.some((c) => c.source_category === 'books')
+  const allThirdParty = citations.every((c) => c.source_category === 'books')
+
   return (
     <div className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
         <BookOpen className="h-3.5 w-3.5" />
         <span>Sources</span>
-        {thirdPartyFallback && (
-          <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-amber-800">
-            no lecture material matched, so this answer leans on third-party text
+        {anyThirdParty && (
+          <span
+            className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-amber-800"
+            title="Commercial textbooks, not your module's lecture material."
+          >
+            {allThirdParty
+              ? 'none of your module material matched - third-party textbook sections'
+              : 'includes third-party textbook sections'}
           </span>
         )}
       </div>
