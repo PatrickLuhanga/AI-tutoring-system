@@ -46,6 +46,16 @@ RENDERABLE_SUFFIXES = {".md", ".markdown", ".txt"}
 _SLIDE_MARKER_RE = re.compile(r"<!--\s*slide\s*(\d+)\s*-->", re.IGNORECASE)
 _ATX_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 _HR_RE = re.compile(r"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$")
+
+#: The OCR pass over the slide decks left these inline, sometimes dozens of times
+#: per document. They are provenance, not content, so they are hoisted into one
+#: banner at the top of the page instead of interrupting the prose.
+_OCR_NOTE_RE = re.compile(
+    r"^\s*\*?\s*(?:diagram|screenshot|image|figure|chart|table|code)?\s*"
+    r"[/ ]?\s*(?:text|diagram|screenshot)[^:\n]{0,40}:\s*\(?\s*ocr[^)\n]*\)?\s*[*_]*\s*$",
+    re.IGNORECASE,
+)
+_GENERIC_OCR_RE = re.compile(r"ocr[, ]+may\s+contain\s+errors", re.IGNORECASE)
 _FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
 
 #: Depth of the generated page's own styling. Deliberately small and inlined: the
@@ -138,6 +148,10 @@ class RenderedDoc:
     headings: list[Heading] = field(default_factory=list)
     source_name: str = ""
     category: str = "notes"
+    #: True when the document was recovered by OCR and carried its "may contain
+    #: errors" warnings. Surfaced once as a provenance banner rather than
+    #: repeated inline, where it broke up the prose.
+    ocr_recovered: bool = False
 
 
 def content_root() -> Path:
@@ -217,6 +231,11 @@ def render_markdown_document(
     in_fence = False
     buffer: list[str] = []
     slide_no: Optional[int] = None
+    had_ocr_note = False
+    # Slide decks arrive with `---` used as a slide separator, so a document can
+    # carry dozens of rules that say nothing. Only emit one when it separates
+    # real prose; adjacent-to-slide-marker rules are dropped.
+    pending_rule = False
 
     def flush() -> None:
         nonlocal buffer
@@ -233,9 +252,16 @@ def render_markdown_document(
             buffer.append(line)
             continue
 
+        # Provenance line from the OCR pass - hoist, do not render inline.
+        if _OCR_NOTE_RE.match(line) or _GENERIC_OCR_RE.search(line):
+            had_ocr_note = True
+            continue
+
         marker = _SLIDE_MARKER_RE.search(line)
         if marker:
             flush()
+            if pending_rule:
+                pending_rule = False  # redundant: the slide anchor is the divider
             slide_no = int(marker.group(1))
             # The slide's own heading supplies the title; this anchor guarantees a
             # landing point even for a slide with no heading.
@@ -246,16 +272,19 @@ def render_markdown_document(
 
         if _HR_RE.match(line):
             flush()
-            out.append("<hr>")
+            pending_rule = True
             continue
 
         heading = _ATX_HEADING_RE.match(line)
         if heading:
             flush()
+            if pending_rule:
+                out.append("<hr>")
+                pending_rule = False
             from .loaders import _clean_title
 
             title = _clean_title(heading.group(2))
-            level = len(heading.group(1))
+            level = _normalise_heading_level(len(heading.group(1)))
             anchor = _unique_anchor(slugify(title), seen)
             headings.append(Heading(level=level, title=title, anchor=anchor, slide=slide_no))
             rendered = md.render(f"{'#' * min(level + 1, 6)} {title}")
@@ -279,10 +308,12 @@ def render_markdown_document(
         buffer.append(line)
 
     flush()
+    if pending_rule:
+        out.append("<hr>")
 
     doc_title = headings[0].title if headings else (source_name or rel_path)
     body = "\n".join(out)
-    return RenderedDoc(
+    rendered_doc = RenderedDoc(
         module_id=module_id,
         rel_path=rel_path,
         title=doc_title,
@@ -291,6 +322,20 @@ def render_markdown_document(
         source_name=source_name or Path(rel_path).name,
         category=category,
     )
+    rendered_doc.ocr_recovered = had_ocr_note
+    return rendered_doc
+
+
+def _normalise_heading_level(raw_level: int) -> int:
+    """Clamp a source heading depth onto a usable ladder.
+
+    The OCR'd decks mix ``##``, ``###`` and ``####`` for what are really the same
+    two tiers of structure, which renders as a ragged outline and produces a
+    near-useless table of contents. Clamping keeps the relative order while
+    guaranteeing that a jump never exceeds one level, so no heading is skipped
+    past its parent.
+    """
+    return min(max(raw_level, 2), 4)
 
 
 def _esc(text: str) -> str:
@@ -345,10 +390,32 @@ def render_resource_page(
             f'<a href="#{_esc(heading.anchor)}">{_esc(heading.title)}</a></li>'
         )
     toc_html = (
-        f'<details class="toc"><summary>Contents ({len(toc)})</summary>'
+        f'<details class="toc" open><summary>Contents ({len(toc)})</summary>'
         f'<ul>{"".join(toc)}</ul></details>'
         if toc
         else ""
+    )
+
+    # Provenance, stated once. The OCR decks repeat their own caveat inline
+    # dozens of times, which is noise once the reader knows it applies to the
+    # whole document.
+    kind = {
+        "slides": ("Lecture slides", "slide-deck"),
+        "notes": ("Lecture notes", "notes"),
+        "lecture_notes": ("Lecture notes", "notes"),
+        "exercises": ("Exercises", "exercises"),
+        "examples": ("Worked examples", "examples"),
+        "books": ("Textbook (third-party)", "book"),
+        "tutor_answers": ("Tutor answer", "answer"),
+    }.get(doc.category, (doc.category.replace("_", " ").title(), "notes"))
+    provenance = (
+        f'<p class="provenance"><span class="badge {kind[1]}">{_esc(kind[0])}</span>'
+        + (
+            '<span class="badge ocr">recovered by OCR &mdash; may contain errors</span>'
+            if doc.ocr_recovered
+            else ""
+        )
+        + "</p>"
     )
 
     nav_links = []
@@ -377,6 +444,21 @@ def render_resource_page(
 .toc ul {{ margin: 10px 0 4px; padding-left: 18px; columns: 2; column-gap: 28px; }}
 .toc li {{ margin: 3px 0; font-size: 14px; break-inside: avoid; }}
 .toc li.lvl3 {{ padding-left: 14px; color: var(--muted); }}
+.toc ul {{ columns: 1; }}
+@media (min-width: 720px) {{ .toc ul {{ columns: 2; column-gap: 32px; }} }}
+p.provenance {{ margin: -14px 0 20px; display: flex; gap: 6px; flex-wrap: wrap; }}
+.badge {{ font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+          padding: 3px 8px; border-radius: 999px; border: 1px solid; }}
+.badge.slide-deck {{ background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }}
+.badge.notes {{ background: #ecfdf5; color: #047857; border-color: #a7f3d0; }}
+.badge.exercises {{ background: #fff7ed; color: #c2410c; border-color: #fed7aa; }}
+.badge.examples {{ background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }}
+.badge.book {{ background: #fefce8; color: #a16207; border-color: #fde68a; }}
+.badge.answer {{ background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }}
+.badge.ocr {{ background: #fff1f2; color: #be123c; border-color: #fecdd3; text-transform: none;
+              letter-spacing: 0; font-weight: 500; }}
+.doc-body {{ font-size: 16.5px; }}
+.doc-body h2 {{ scroll-margin-top: 80px; }}
 </style>
 </head>
 <body>
@@ -388,9 +470,12 @@ def render_resource_page(
 </header>
 <main>
   <h1 class="doc">{_esc(doc.title)}</h1>
+  {provenance}
   <p class="meta">Source file <code>{_esc(doc.rel_path)}</code></p>
   {toc_html}
+  <article class="doc-body">
   {doc.html}
+  </article>
   <footer class="doc">{"".join(nav_links)}</footer>
 </main>
 {flash}

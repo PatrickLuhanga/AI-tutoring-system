@@ -20,6 +20,7 @@ chunked text, and always reflects the current corpus.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -55,6 +56,29 @@ def _module_dir(module_id: str) -> Optional[Path]:
     return content_root() / folder
 
 
+_HEADING_RE = re.compile(r"^#{1,3}\s+(.+?)\s*#*\s*$")
+
+
+def _document_title(path: Path) -> str | None:
+    """First heading in a document, without opening the whole corpus.
+
+    Only the first few kilobytes are read: a title always sits at the top, and
+    some of these files are whole textbook chapters.
+    """
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            for _ in range(40):
+                line = handle.readline()
+                if not line:
+                    return None
+                match = _HEADING_RE.match(line.strip())
+                if match:
+                    return re.sub(r"[*_`~]+", "", match.group(1)).strip() or None
+    except OSError:
+        return None
+    return None
+
+
 def _list_documents(module_id: str) -> list[dict]:
     """Every renderable document in a module, ordered by category then name."""
     directory = _module_dir(module_id)
@@ -77,6 +101,11 @@ def _list_documents(module_id: str) -> list[dict]:
             {
                 "path": rel,
                 "name": path.name,
+                # The document's own heading, so a library listing reads as
+                # "Stages of the research process" rather than
+                # "01_Stages_of_Research.md". Falls back to the filename for a
+                # document with no heading.
+                "title": _document_title(path) or path.name,
                 "group": parts[0] if len(parts) > 1 else "",
                 "source_category": category,
                 "size_bytes": size,
