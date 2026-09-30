@@ -25,6 +25,25 @@ ADMIN_PATHS = (
 STRONG_KEY = "t8Kq2vN4pR7xW3mZ9cL5yB1dF6gH0jA"
 
 
+@pytest.fixture(autouse=True)
+def _dev_mode(monkeypatch):
+    """Pin ``AUTH_MODE=dev`` for this module.
+
+    The tutor-queue tests here exercise identity via the ``X-User-*`` headers,
+    which ``AUTH_MODE=session`` now refuses by design. The deployment default
+    changed; these tests deliberately test the development path, so they state
+    the mode they need rather than inheriting whatever ``.env`` happens to say.
+    """
+    import src.auth as auth_module
+
+    patchable = types.SimpleNamespace(
+        **{f: getattr(settings, f) for f in dir(settings) if not f.startswith("_")}
+    )
+    patchable.auth_mode = "dev"
+    monkeypatch.setattr(auth_module, "settings", patchable)
+    return patchable
+
+
 @pytest.fixture
 def admin_key(monkeypatch):
     """Override the admin key on a mutable stand-in for the frozen settings.
@@ -32,10 +51,14 @@ def admin_key(monkeypatch):
     ``settings`` is a frozen dataclass, so the module reference is swapped for a
     copy rather than mutated. ``require_admin`` reads ``settings.admin_api_key`` at
     call time, so this is the seam the test needs.
+
+    Built from whatever ``src.auth.settings`` currently is, so the autouse
+    ``_dev_mode`` fixture above is not undone by this one replacing it.
     """
     import src.auth as auth_module
 
-    patchable = types.SimpleNamespace(**{f: getattr(settings, f) for f in dir(settings)
+    base = auth_module.settings
+    patchable = types.SimpleNamespace(**{f: getattr(base, f) for f in dir(base)
                                          if not f.startswith("_")})
     monkeypatch.setattr(auth_module, "settings", patchable)
     return patchable
@@ -170,31 +193,102 @@ def test_response_reports_the_callers_own_scope(client):
 # ---------------------------------------------------------------------------
 # Known gap, pinned so it cannot change silently
 # ---------------------------------------------------------------------------
-def test_a_header_authenticated_tutor_has_no_module_scope(client):
-    """A real, currently-unfixed gap: the tutor role cannot reach the queue.
+def test_an_unseeded_identity_gets_no_tutor_scope(client):
+    """Fail-closed, and it is the intended behaviour.
 
-    ``resolve_tutor_scope`` needs ``identity.student_id`` to look up
-    ``tutor_assignments``, but a header-derived identity always has
-    ``student_id=None`` because DUT4life is not wired. So every
-    ``X-User-Role: tutor`` caller gets an empty scope and an empty queue, and
-    ``tutor_assignments`` is unreachable in practice.
+    ``resolve_tutor_scope`` needs ``identity.student_id`` to read
+    ``tutor_assignments``, and ``_load_identity`` only sets it for an email that
+    exists in the ``students`` directory. An email that is not in the directory
+    therefore resolves to no scope at all.
 
-    The Human Adjustment Cycle is therefore only operable by a caller asserting
-    ``X-User-Role: admin``. This is safe in the sense that nothing leaks, but it
-    is not the scoping the design intends, and the paper should not describe tutor
-    role-based access as working until an identity provider sets ``student_id``.
+    That is correct: an unrecognised caller must not inherit a module grant. It
+    was briefly misread as a bug - the queue appeared unreachable for every
+    ``X-User-Role: tutor`` caller - but the directory ships seeded
+    (``iprt.lecturer@`` and ``pbdv.lecturer@``), so real tutors do resolve. The
+    empty scope only appears for an email nobody seeded.
 
-    Fixing it means deciding how a tutor's modules are established (DUT4life
-    subject, an enrollment table, or an explicit assignment endpoint) - an identity
-    decision, not a patch. Until then this test asserts the safe behaviour: no
-    questions, rather than all of them.
+    See ``test_a_seeded_tutor_sees_exactly_their_assigned_module`` for the
+    positive case.
     """
     response = client.get("/api/tutor/questions", headers=TUTOR)
     assert response.status_code == 200
     body = response.get_json()
     assert body["count"] == 0, (
-        "a tutor with no resolved scope is now seeing questions; if this is "
-        "intended, update the note above and add the scoping that justifies it"
+        "an identity absent from the students directory is now seeing questions"
+    )
+    assert body["scope"]["modules"] == []
+
+
+def test_a_seeded_tutor_sees_exactly_their_assigned_module(client):
+    """The positive case: the RBAC mapping is live, not decorative.
+
+    ``_load_identity`` takes the role from the ``students`` row rather than from
+    the header, so the seeded directory is the source of truth for both the role
+    and the module grant.
+    """
+    from sqlalchemy import select
+
+    from src.db import session_scope
+    from src.models import TutorAssignment
+
+    with session_scope() as session:
+        row = session.execute(
+            select(TutorAssignment.tutor_id, TutorAssignment.module_id).limit(1)
+        ).first()
+    if row is None:
+        pytest.skip("tutor_assignments is empty; the directory is not seeded")
+
+    tutor_id, module_id = int(row[0]), row[1]
+    from src.models import Student
+
+    with session_scope() as session:
+        email = session.execute(
+            select(Student.dut4life_email).where(Student.student_id == tutor_id)
+        ).scalar_one_or_none()
+    if email is None:
+        pytest.skip(f"tutor_id {tutor_id} has no students row")
+
+    response = client.get(
+        "/api/tutor/questions",
+        headers={"X-User-Email": email, "X-User-Role": "tutor"},
+    )
+    assert response.status_code == 200
+    scope = response.get_json()["scope"]
+    assert scope["role"] == "tutor"
+    assert scope["modules"] == [module_id], (
+        f"scope is {scope['modules']}, expected exactly [{module_id}]"
+    )
+
+
+def test_a_tutor_cannot_widen_their_scope_by_asking_for_another_module(client):
+    """The filter is applied per request, not only to the default listing."""
+    from sqlalchemy import select
+
+    from src.db import session_scope
+    from src.models import Student, TutorAssignment
+
+    with session_scope() as session:
+        grants = session.execute(select(TutorAssignment.tutor_id, TutorAssignment.module_id)).all()
+        modules = [g[1] for g in grants]
+        if not modules:
+            pytest.skip("tutor_assignments is empty")
+        tutor_id, owned = grants[0]
+        email = session.execute(
+            select(Student.dut4life_email).where(Student.student_id == tutor_id)
+        ).scalar_one_or_none()
+    if email is None:
+        pytest.skip("no students row for the seeded tutor")
+    other = next((m for m in settings.modules if m not in {owned}), None)
+    if other is None:
+        pytest.skip("only one module is granted anywhere")
+
+    response = client.get(
+        f"/api/tutor/questions?module_id={other}",
+        headers={"X-User-Email": email, "X-User-Role": "tutor"},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["questions"] == [], (
+        f"a tutor scoped to {owned} was shown {other} questions"
     )
 
 

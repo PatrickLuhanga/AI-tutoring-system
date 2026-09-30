@@ -75,6 +75,14 @@ def corpus_loaded(embedder):
 
 
 @pytest.fixture(scope="session")
+def retriever():
+    """A retriever bound to the configured ceiling, for threshold tests."""
+    from src.retriever import Retriever
+
+    return Retriever()
+
+
+@pytest.fixture(scope="session")
 def patterns_loaded(embedder):
     from sqlalchemy import func, select
 

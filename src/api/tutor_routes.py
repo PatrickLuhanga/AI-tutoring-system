@@ -18,7 +18,7 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from ..auth import resolve_identity
+from ..auth import AuthError, resolve_identity
 from ..unanswered import (
     TutorScope,
     answer_question,
@@ -32,6 +32,12 @@ logger = logging.getLogger(__name__)
 
 tutor_bp = Blueprint("tutor", __name__, url_prefix="/api/tutor")
 
+#: Roles that may work the help queue. A ``lecturer`` is a superset of a tutor,
+#: so the queue is not tutor-only. Kept in step with the 403 contract in
+#: tests/test_auth.py: presenting the wrong credential is Forbidden, not
+#: Unauthorized.
+QUEUE_ROLES = {"tutor", "lecturer", "admin"}
+
 
 def _scope() -> tuple[object, TutorScope]:
     identity = resolve_identity(request)
@@ -39,10 +45,8 @@ def _scope() -> tuple[object, TutorScope]:
 
 
 def _require_tutor(identity) -> None:
-    if identity.role not in {"tutor", "admin"}:
-        from ..auth import AuthError
-
-        raise AuthError("Tutor or admin role required.", status_code=403)
+    if identity.role not in QUEUE_ROLES:
+        raise AuthError("Tutor, lecturer or admin role required.", status_code=403)
 
 
 @tutor_bp.get("/questions")

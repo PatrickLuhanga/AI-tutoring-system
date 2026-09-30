@@ -225,6 +225,34 @@ class Settings:
     llm_config_secret_key: str
     intent_use_llm: bool
 
+    # --- Account-based authentication ------------------------------------
+    #: Session lifetime in hours; a session past this is treated as logged out.
+    session_ttl_hours: int
+    #: Emails a student account may register with. DUT4life student addresses
+    #: are all @dut4life.ac.za; staff and external addresses are rejected.
+    student_email_domain: str
+    #: Emails a lecturer account may register with (academic staff).
+    lecturer_email_domain: str
+    #: Minimum password length enforced at signup.
+    min_password_length: int
+    #: Set false to close registration while leaving existing logins working.
+    allow_self_signup: bool
+
+    # --- Practice tests ----------------------------------------------------
+    #: Questions sampled per practice run when the client does not ask for a size.
+    practice_default_size: int
+    #: Upper bound on a single practice run.
+    practice_max_size: int
+    #: Largest upload accepted, in megabytes.
+    upload_max_mb: int
+    #: File extensions accepted by the upload endpoint.
+    upload_allowed_extensions: tuple[str, ...]
+    #: Shared secret a person must present to register a System Admin account.
+    #: Empty (the default) means admin self-registration is *closed*, which is
+    #: why the value lives in ``.env`` rather than in tracked source: a secret
+    #: committed to git cannot be un-leaked.
+    admin_signup_secret: str
+
     # Inference-tier fault isolation (Ollama circuit breaker)
     ollama_circuit_failure_threshold: int
     ollama_circuit_reset_timeout: float
@@ -383,13 +411,35 @@ def _build_settings() -> Settings:
         llm_top_p=_float("LLM_TOP_P", 0.9),
         llm_config_secret_key=_str("LLM_CONFIG_SECRET_KEY", ""),
         intent_use_llm=_bool("INTENT_USE_LLM", True),
+        session_ttl_hours=_int("SESSION_TTL_HOURS", 12),
+        student_email_domain=_str("STUDENT_EMAIL_DOMAIN", "dut4life.ac.za").lower().lstrip("@"),
+        lecturer_email_domain=_str("LECTURER_EMAIL_DOMAIN", "dut.ac.za").lower().lstrip("@"),
+        min_password_length=_int("MIN_PASSWORD_LENGTH", 8),
+        allow_self_signup=_bool("ALLOW_SELF_SIGNUP", True),
+        practice_default_size=_int("PRACTICE_DEFAULT_SIZE", 5),
+        practice_max_size=_int("PRACTICE_MAX_SIZE", 25),
+        upload_max_mb=_int("UPLOAD_MAX_MB", 25),
+        upload_allowed_extensions=tuple(
+            e.strip().lower().lstrip(".")
+            for e in _str(
+                "UPLOAD_ALLOWED_EXTENSIONS",
+                "pdf,docx,pptx,txt,md,csv",
+            ).split(",")
+            if e.strip()
+        ),
+        admin_signup_secret=_str("ADMIN_SIGNUP_SECRET", ""),
         ollama_circuit_failure_threshold=_int("OLLAMA_CIRCUIT_FAILURE_THRESHOLD", 3),
         ollama_circuit_reset_timeout=_float("OLLAMA_CIRCUIT_RESET_TIMEOUT", 30.0),
         ollama_health_timeout=_int("OLLAMA_HEALTH_TIMEOUT", 5),
         ollama_think=_bool("OLLAMA_THINK", False),
         retrieval_top_k=_int("RETRIEVAL_TOP_K", 3),
         retrieval_code_top_k=_int("RETRIEVAL_CODE_TOP_K", 3),
-        retrieval_max_distance=_float("RETRIEVAL_MAX_DISTANCE", 0.75),
+        # Calibrated against the ingested corpus with all-MiniLM-L6-v2: every
+        # on-topic probe measured came in at 0.38 or below and every mismatched
+        # one at 0.45 or above, so 0.40 sits in that gap. The old 0.75 was loose
+        # enough to answer "what is research" in PBDV301 from a Flask textbook
+        # chapter at distance 0.67.
+        retrieval_max_distance=_float("RETRIEVAL_MAX_DISTANCE", 0.40),
         retrieval_include_third_party=_bool("RETRIEVAL_INCLUDE_THIRD_PARTY", False),
         retrieval_third_party_fallback=_bool("RETRIEVAL_THIRD_PARTY_FALLBACK", True),
         hnsw_iterative_scan=_str("HNSW_ITERATIVE_SCAN", "strict_order").lower(),
