@@ -432,6 +432,10 @@ class TutoringWorkflow:
             return None
         if include_patterns:
             merged.patterns = first.patterns
+        # `merged` is a fresh result, so it carries none of the contributing runs'
+        # flags. Re-derive the disclosure, or a merged turn made entirely of
+        # textbook chunks is presented to the student as course material.
+        merged.sync_third_party_flag()
         return merged
 
     @staticmethod

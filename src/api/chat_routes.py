@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ..agents import ChatRequest, TutoringWorkflow
-from ..auth import check_module_access, resolve_identity
+from ..auth import check_module_access, require_student
 from ..db import session_scope
 from ..inference import INFERENCE_UNAVAILABLE_MESSAGE
 from ..llm_router import LLMError
@@ -55,7 +55,7 @@ def chat():
     if not module_id:
         return jsonify({"error": "`module_id` is required."}), 400
 
-    identity = resolve_identity(request)
+    identity = require_student(request)
     access = check_module_access(identity, module_id)
     if not access.allowed:
         status = 404 if not access.exists else 403
@@ -101,7 +101,7 @@ def feedback():
     if reason_tag is not None and reason_tag not in FEEDBACK_REASON_TAGS:
         return jsonify({"error": f"`reason_tag` must be one of {list(FEEDBACK_REASON_TAGS)}."}), 400
 
-    identity = resolve_identity(request)
+    identity = require_student(request)
     module_id = payload.get("module_id")
     values = {
         "session_id": session_id,

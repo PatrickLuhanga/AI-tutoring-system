@@ -150,10 +150,30 @@ class TutorScope:
 
 
 def resolve_tutor_scope(identity) -> TutorScope:
-    """Derive module scope from ``tutor_assignments`` (DB level, section 4.2)."""
+    """Derive module scope for a staff identity (DB level, section 4.2).
+
+    Two sources, because there are two ways to be staff:
+
+    * a **login account**, whose scope lives in ``user_module_access`` and is
+      resolved once during login;
+    * a **dev header** identity, whose scope still comes from the legacy
+      ``tutor_assignments`` table.
+
+    A ``lecturer`` is a superset of ``tutor`` and is scoped identically; both are
+    also given any modules already resolved onto the identity, so a session
+    never has to re-query to answer a scope question.
+    """
     if identity.role == "admin":
         return TutorScope(is_admin=True, module_ids=[])
-    if identity.role != "tutor" or identity.student_id is None:
+
+    if identity.role not in {"tutor", "lecturer"}:
+        return TutorScope(is_admin=False, module_ids=[])
+
+    resolved = list(getattr(identity, "module_ids", ()) or ())
+    if resolved:
+        return TutorScope(is_admin=False, module_ids=resolved)
+
+    if identity.student_id is None:
         return TutorScope(is_admin=False, module_ids=[])
     try:
         with session_scope() as session:

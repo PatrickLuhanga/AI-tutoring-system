@@ -25,6 +25,7 @@ preferentially cites the faculty-approved course material.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -38,6 +39,27 @@ from .loaders import THIRD_PARTY_CATEGORIES
 from .models import CodeRepairPattern, CurriculumChunk
 
 logger = logging.getLogger(__name__)
+
+#: Tags the ingested textbooks leave inside heading text, e.g. the stored title
+#: ``<u>PART I</u> Introduction to Flask``. Stripped for display only - the
+#: citation anchor is still derived from the raw title so it keeps matching the
+#: id the page renderer emits for that heading.
+_MARKUP = re.compile(r"<[^>]+>")
+_WHITESPACE = re.compile(r"\s+")
+
+
+def plain_title(title: Optional[str]) -> Optional[str]:
+    """Return ``title`` with inline markup removed, for display and prompting.
+
+    507 of the 4,080 ingested chunks carry HTML from the source textbooks, which
+    otherwise reaches the student as literal ``<u>CHAPTER 16</u>`` in the sources
+    panel and as noise in the tutor's prompt.
+    """
+    if not title:
+        return title
+    cleaned = _WHITESPACE.sub(" ", _MARKUP.sub("", title)).strip()
+    return cleaned or title
+
 
 
 @dataclass(frozen=True)
@@ -95,7 +117,6 @@ class RetrievedChunk:
             "preview": (self.text or "")[:240],
         }
 
-
 @dataclass(slots=True)
 class RetrievedPattern:
     pattern_id: int
@@ -146,6 +167,20 @@ class RetrievalResult:
         """Provenance classes actually present in the prompt context."""
         return sorted({c.source_category for c in self.chunks})
 
+    def sync_third_party_flag(self) -> None:
+        """Re-derive the third-party disclosure from the chunks actually served.
+
+        ``third_party_fallback`` is a disclosure the UI renders as "none of your
+        module material matched", so it has to describe the context the student is
+        shown rather than the route that produced it. Both retrieval passes that
+        can hand back textbook chunks have to call this: the widening branch in
+        :meth:`Retriever.retrieve`, and the reciprocal-rank merge in
+        ``TutoringWorkflow._fuse`` - which builds a fresh result and would
+        otherwise silently reset the flag to its ``False`` default.
+        """
+        if any(c.source_category in THIRD_PARTY_CATEGORIES for c in self.chunks):
+            self.third_party_fallback = True
+
     def context_text(self) -> str:
         """Flatten everything retrieved into one prompt-ready block.
 
@@ -156,7 +191,7 @@ class RetrievalResult:
         blocks: list[str] = []
         for chunk in self.chunks:
             label = chunk.cite_key or f"C{self.chunks.index(chunk) + 1}"
-            title = chunk.section_title or chunk.source_name
+            title = plain_title(chunk.section_title) or chunk.source_name
             blocks.append(
                 f"[{label}] {chunk.source_file} :: \"{title}\"\n{chunk.text}"
             )
@@ -175,7 +210,7 @@ class RetrievalResult:
                 "cite_key": chunk.cite_key,
                 "module_id": chunk.module_id,
                 "source_file": chunk.source_file,
-                "section_title": chunk.section_title,
+                "section_title": plain_title(chunk.section_title),
                 "url": chunk.url,
                 "anchor": chunk.anchor,
                 "distance": round(chunk.distance, 4),
@@ -223,25 +258,53 @@ class Retriever:
                 and not policy.include_third_party
                 and settings.retrieval_third_party_fallback
             ):
+                # Widening exists so a thin module result does not leave the tutor
+                # with no context, but a textbook chapter about an unrelated topic
+                # is worse than no context: the tutor cites it, so the student is
+                # shown a confident answer attributed to their course material that
+                # never said it. Require the widened hits to be clearly closer than
+                # the module's own weakest hit before substituting them.
+                floor = result.chunks[-1].distance if result.chunks else None
+                ceiling = policy.max_distance
+                if floor is not None:
+                    ceiling = min(ceiling, floor) if ceiling is not None else floor
                 widened = RetrievalPolicy(
                     allow_answers=policy.allow_answers,
                     include_third_party=True,
-                    max_distance=policy.max_distance,
+                    max_distance=ceiling,
                 )
+                module_hits = len(result.chunks)
+                module_below = result.below_threshold
                 chunks, below = self._search_curriculum(session, vector, module_id, widened)
-                if len(chunks) > len(result.chunks):
+                if len(chunks) > module_hits:
                     result.chunks = chunks
                     result.below_threshold = below
                     result.third_party_fallback = True
                     result.policy = widened
                     logger.info(
-                        "Only %d module chunk(s) for %r in %s; widened to third-party content",
-                        len(chunks) - len(result.chunks),
+                        "Only %d module chunk(s) for %r in %s; widened to %d third-party chunk(s) "
+                        "at distance <= %.4f",
+                        module_hits,
+                        query[:60],
+                        module_id,
+                        len(chunks) - module_hits,
+                        ceiling if ceiling is not None else float("nan"),
+                    )
+                else:
+                    logger.info(
+                        "Only %d module chunk(s) for %r in %s; no third-party content was close "
+                        "enough to substitute",
+                        module_hits,
                         query[:60],
                         module_id,
                     )
+                    result.below_threshold = module_below
             if include_patterns:
                 result.patterns = self._search_patterns(session, vector, module_id)
+
+        # Disclosure must describe the chunks that were actually returned, not
+        # just the branch that produced them - see sync_third_party_flag.
+        result.sync_third_party_flag()
 
         logger.info(
             "Retrieved %d chunks and %d patterns for module %s "
