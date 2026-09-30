@@ -58,17 +58,34 @@ if ($ready) { Ok "ai_tutoring_pg healthy on 5433" } else { Warn "container not h
 # --- 2. Ollama (local LLM) ---------------------------------------------------
 Step "Ollama (local LLM, port 11434)"
 
+# Check for the model the gateway is actually configured to use, not a hardcoded
+# family. This used to grep for 'qwen3' while the default was qwen2.5:3b-instruct,
+# so it could report "qwen3 model present" on a machine that did not have the
+# model the app would actually request - and warn on one that did.
+$envFile = Join-Path $PSScriptRoot '.env'
+$defaultModel = 'qwen2.5:3b-instruct'
+if (Test-Path $envFile) {
+    $line = Select-String -Path $envFile -Pattern '^\s*DEFAULT_LOCAL_MODEL\s*=\s*(.+?)\s*$' |
+            Select-Object -First 1
+    if ($line) { $defaultModel = $line.Matches[0].Groups[1].Value.Trim() }
+}
+
 if (-not (Test-Path $ollamaExe)) {
-    Warn "Ollama not installed. Install it, then: ollama pull qwen3:4b"
+    Warn "Ollama not installed. Install it, then: ollama pull $defaultModel"
 } else {
     $listening = Get-NetTCPConnection -LocalPort 11434 -State Listen -ErrorAction SilentlyContinue
     if (-not $listening) {
         Warn "Ollama is installed but not running. Launch the Ollama app (or run 'ollama serve')."
     } else {
         Ok "listening on 11434"
-        $haveModel = (& $ollamaExe list 2>$null | Select-String 'qwen3')
-        if ($haveModel) { Ok "qwen3 model present" }
-        else { Warn "no qwen3 model - run: ollama pull qwen3:4b   (chat will 502 until then)" }
+        $installed = (& $ollamaExe list 2>$null) -join "`n"
+        if ($installed -match [regex]::Escape($defaultModel)) {
+            Ok "configured model present: $defaultModel"
+        } else {
+            Warn "configured model '$defaultModel' is NOT installed - run: ollama pull $defaultModel"
+            Warn "  (installed: $(((& $ollamaExe list 2>$null) | Select-Object -Skip 1 | ForEach-Object { ($_ -split '\s+')[0] }) -join ', '))"
+            Warn "  chat will 502 until it is pulled"
+        }
     }
 }
 

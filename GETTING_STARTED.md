@@ -225,17 +225,54 @@ so nothing extra to configure.
 
 ### Smoke test the full pipeline
 
+With `AUTH_MODE=session` (the default in `.env.example`) the `X-User-*` headers
+are **refused** - a request has to carry a session token. Register once, then use
+the returned token:
+
 ```powershell
+# 1. Register a student (student number must be 8 digits, @dut4life.ac.za email)
+curl -X POST http://127.0.0.1:5000/api/auth/signup `
+  -H "Content-Type: application/json" `
+  -d '{\"email\":\"22000000@dut4life.ac.za\",\"password\":\"choose-a-password\",\"role\":\"student\",\"student_number\":\"22000000\"}'
+```
+
+That returns `{"user": {...}, "token": "..."}`. Copy the token:
+
+```powershell
+$TOKEN = "<paste the token>"
+
+# 2. Confirm who you are
+curl http://127.0.0.1:5000/api/auth/me -H "Authorization: Bearer $TOKEN"
+
+# 3. Ask the tutor
 curl -X POST http://127.0.0.1:5000/api/chat `
   -H "Content-Type: application/json" `
-  -H "X-User-Email: 22000000@dut4life.ac.za" `
-  -H "X-User-Role: student" `
+  -H "Authorization: Bearer $TOKEN" `
   -d '{\"module_id\":\"IPRT301\",\"message\":\"Why does my Java code throw a NullPointerException?\",\"history\":[]}'
 ```
 
 A successful reply includes `intent`, `scaffolding`, `guardrail`, `retrieval`
 and `llm` audit blocks. Pass the returned `session_id` back on the next call to
 advance the Socratic progression.
+
+> **Prefer the browser?** Just open http://localhost:5173 and use the sign-in
+> screen; it does the same thing and stores the token for you.
+
+#### If you need the header form back
+
+Set `AUTH_MODE=dev` in `.env` and restart. The `X-User-Email` / `X-User-Role`
+headers are then trusted again:
+
+```powershell
+curl -X POST http://127.0.0.1:5000/api/chat `
+  -H "Content-Type: application/json" `
+  -H "X-User-Email: 22000000@dut4life.ac.za" `
+  -H "X-User-Role: student" `
+  -d '{\"module_id\":\"IPRT301\",\"message\":\"...\",\"history\":[]}'
+```
+
+**Only do this on a machine only you can reach.** In `dev` mode anyone who can
+open port 5000 can claim to be any user by setting a header.
 
 ---
 
@@ -250,3 +287,9 @@ advance the Socratic progression.
 | Admin dashboard returns 401 | `VITE_ADMIN_KEY` must equal backend `ADMIN_API_KEY` |
 | Embedding dimension mismatch | `EMBEDDING_DIM` must match the model; change and re-run `python -m src.setup_database --drop` + re-ingest |
 | UI shows "Mock data" badge | `VITE_USE_MOCK` is still `true` — set `false` and restart Vite |
+| Every API call returns `401 Sign in to continue.` | `AUTH_MODE=session` and you are sending no bearer token. Sign in at http://localhost:5173, or see the smoke test in §6 |
+| An old `curl` with `X-User-Email` returns 401 | Expected under `AUTH_MODE=session`; those headers are refused. Use a token, or switch back to `AUTH_MODE=dev` for local poking |
+| Tutor/lecturer sees no modules | `user_module_access` is empty — the account was registered without picking modules, or the module id does not exist in `modules` |
+| Admin self-registration returns 403 "not enabled" | `ADMIN_SIGNUP_SECRET` is empty, which disables it on purpose. Set it in `.env` and restart |
+| Admin self-registration says "code is incorrect" 5 times | The lockout tripped. Wait 5 minutes, or clear `_admin_attempts` by restarting the gateway |
+| Tutor cites a textbook section as if it were lecture notes | The Sources panel should show an amber "none of your module material matched" badge. If it does not, `RETRIEVAL_MAX_DISTANCE` is too loose — see §7 |
