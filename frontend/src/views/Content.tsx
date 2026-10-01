@@ -261,7 +261,7 @@ function BankTab({ moduleId, onError, onOk }: { moduleId: string; onError: (s: s
             type="button"
             onClick={() => void add()}
             disabled={busy || prompt.trim().length < 8}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-on-accent transition hover:bg-blue-700 disabled:opacity-50"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Add
@@ -441,7 +441,7 @@ function GenerateTab({ moduleId, onError, onOk }: { moduleId: string; onError: (
           type="button"
           onClick={() => void run()}
           disabled={busy || !ready}
-          className="ml-auto flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+          className="ml-auto flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-on-accent transition hover:bg-indigo-700 disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {source === 'corpus' ? 'Generate from notes' : 'Generate questions'}
@@ -549,7 +549,7 @@ function UploadTab({
             type="button"
             onClick={() => void send()}
             disabled={busy || !file}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-on-accent transition hover:bg-blue-700 disabled:opacity-50"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             Upload
@@ -657,7 +657,7 @@ function AnnounceTab({
         type="button"
         onClick={() => void send()}
         disabled={busy || !title.trim() || !body.trim()}
-        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-on-accent transition hover:bg-blue-700 disabled:opacity-50"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
         Send announcement

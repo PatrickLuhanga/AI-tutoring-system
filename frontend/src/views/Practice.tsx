@@ -150,7 +150,7 @@ export default function Practice() {
           type="button"
           onClick={() => void draw()}
           disabled={loading || !moduleId}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-on-accent transition hover:bg-blue-700 disabled:opacity-50"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {drawn ? 'New set' : 'Draw questions'}
@@ -256,7 +256,7 @@ export default function Practice() {
                   type="button"
                   onClick={() => void submit()}
                   disabled={loading || !allAnswered}
-                  className="ml-auto flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+                  className="ml-auto flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-on-accent transition hover:bg-blue-700 disabled:opacity-50"
                 >
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Submit

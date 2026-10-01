@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import NotificationBell from './components/NotificationBell'
+import { ThemeToggle } from './components/ThemeControl'
 import { useSession } from './state/session'
 
 const Login = lazy(() => import('./views/Login'))
@@ -165,7 +166,7 @@ export default function App() {
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-on-accent shadow-sm">
               <ShieldCheck className="h-4 w-4" />
             </div>
             <div className="leading-tight">
@@ -202,6 +203,7 @@ export default function App() {
               {user.full_name || user.email}
             </span>
             <NotificationBell />
+            <ThemeToggle />
             <button
               type="button"
               onClick={() => void logout()}

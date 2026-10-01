@@ -11,9 +11,12 @@ import {
   Sparkles,
   Target,
   TrendingUp,
+  Palette,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { ThemeSegmented } from '../components/ThemeControl'
+import { useTheme } from '../state/theme'
 import { useSession } from '../state/session'
 import type { Module } from '../types'
 
@@ -28,6 +31,7 @@ import type { Module } from '../types'
  */
 export default function Home() {
   const { user } = useSession()
+  const { choice, theme } = useTheme()
   const [modules, setModules] = useState<Module[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
 
@@ -72,7 +76,7 @@ export default function Home() {
         <div className="mt-4 flex flex-wrap gap-2">
           <a
             href="#/chat"
-            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-on-accent transition hover:bg-blue-700"
           >
             <MessageSquare className="h-4 w-4" />
             Ask the tutor
@@ -220,6 +224,27 @@ export default function Home() {
               <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
             </a>
           ))}
+        </div>
+      </section>
+
+      {/* Appearance */}
+      <section className="mt-8">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Palette className="h-4 w-4 text-slate-400" />
+          Appearance
+        </h2>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800">Colour theme</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {choice === 'system'
+                  ? `Following your device, which is currently set to ${theme}.`
+                  : `Always ${theme}, whatever your device prefers.`}
+              </p>
+            </div>
+            <ThemeSegmented />
+          </div>
         </div>
       </section>
     </div>

@@ -212,7 +212,7 @@ export default function TutorDashboard() {
                       type="button"
                       disabled={busy || !answer.trim()}
                       onClick={() => void act(q.question_id, 'answer')}
-                      className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-on-accent transition hover:bg-blue-700 disabled:opacity-50"
                     >
                       <Check className="h-3.5 w-3.5" />
                       Save answer

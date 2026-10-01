@@ -2,6 +2,7 @@ import { GraduationCap, Loader2, LogIn, ShieldCheck, UserPlus } from 'lucide-rea
 import { useEffect, useMemo, useState } from 'react'
 import { authApi } from '../api/auth'
 import { api } from '../api/client'
+import { ThemeSegmented } from '../components/ThemeControl'
 import { useSession } from '../state/session'
 import type { AccountRole, Module, SignupPolicy } from '../types'
 
@@ -80,10 +81,16 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-slate-100 px-4 py-10">
+    <div className="relative flex min-h-full items-center justify-center bg-slate-100 px-4 py-10">
+      {/* Available before sign-in on purpose: someone who lands on this page in
+          a bright room and prefers dark should not have to create an account
+          first to say so. */}
+      <div className="absolute right-4 top-4">
+        <ThemeSegmented />
+      </div>
       <div className="w-full max-w-md">
         <div className="mb-6 flex items-center justify-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-on-accent shadow-sm">
             <GraduationCap className="h-5 w-5" />
           </div>
           <div className="leading-tight">
@@ -240,7 +247,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={busy || (mode === 'signup' && policy !== null && !policy.allow_self_signup)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-medium text-on-accent transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
               {mode === 'login' ? 'Sign in' : 'Create account'}

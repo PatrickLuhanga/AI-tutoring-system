@@ -50,7 +50,7 @@ export default function CodeBlock({ language, value }: CodeBlockProps) {
 
   return (
     <div className="not-prose my-4 overflow-hidden rounded-xl border border-slate-700/60 bg-[#282c34] shadow-lg">
-      <div className="flex items-center justify-between border-b border-slate-700/60 bg-slate-800/80 px-4 py-2">
+      <div className="flex items-center justify-between border-b border-white/10 bg-[#16161a] px-4 py-2">
         <div className="flex items-center gap-2">
           <span className="flex gap-1.5">
             <span className="h-3 w-3 rounded-full bg-rose-400/80" />
@@ -64,7 +64,7 @@ export default function CodeBlock({ language, value }: CodeBlockProps) {
         <button
           type="button"
           onClick={copy}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-slate-300 transition hover:bg-slate-700 hover:text-white"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white"
           aria-label="Copy code"
         >
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}

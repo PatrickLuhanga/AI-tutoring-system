@@ -195,7 +195,7 @@ export default function StudentChat() {
       >
         {!hasMessages && (
           <div className="flex h-full flex-col items-center justify-center px-2 text-center">
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-on-accent shadow-sm">
               <Bot className="h-5 w-5" />
             </div>
             <p className="text-sm font-medium text-slate-700">
@@ -212,7 +212,7 @@ export default function StudentChat() {
         {messages.map((message) =>
           message.role === 'user' ? (
             <div key={message.message_id} className="flex justify-end gap-2.5">
-              <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-blue-600 px-3.5 py-2 text-sm leading-relaxed text-white shadow-sm">
+              <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-blue-600 px-3.5 py-2 text-sm leading-relaxed text-on-accent shadow-sm">
                 {message.content}
               </div>
               <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600">
@@ -221,7 +221,7 @@ export default function StudentChat() {
             </div>
           ) : (
             <div key={message.message_id} className="flex gap-2.5">
-              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
+              <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-on-accent shadow-sm">
                 <Bot className="h-3.5 w-3.5" />
               </div>
               <div className="min-w-0 max-w-[90%] flex-1">
@@ -250,7 +250,7 @@ export default function StudentChat() {
 
         {sending && (
           <div className="flex items-center gap-2.5 text-sm text-slate-400">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-on-accent shadow-sm">
               <Bot className="h-3.5 w-3.5" />
             </div>
             <span className="flex items-center gap-2 rounded-2xl rounded-tl-md border border-slate-200 bg-slate-50/70 px-3.5 py-2">
@@ -298,7 +298,7 @@ export default function StudentChat() {
               type="submit"
               disabled={!input.trim()}
               title="Send (Enter)"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-on-accent transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Send className="h-4 w-4" />
             </button>
