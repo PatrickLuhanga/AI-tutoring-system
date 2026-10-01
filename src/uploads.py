@@ -149,8 +149,13 @@ def store_upload(
             stored_path=stored_rel,
             content_type=(content_type or None),
             size_bytes=len(data),
-            # A past paper is a question source, not something to embed.
-            ingest_status="pending" if kind != "past_paper" else "pending",
+            # Both kinds start pending. A past paper is a question *source* rather than
+            # something to embed, but it is still pending until the extractor has
+            # either produced questions from it or recorded why it could not -
+            # previously it was set to "pending" by both branches of a dead
+            # ternary, and nothing ever moved either kind off pending, so the UI
+            # reported "pending" forever.
+            ingest_status="pending",
         )
         session.add(row)
         session.flush()
@@ -224,5 +229,6 @@ def _to_dict(row: UploadedDocument) -> dict:
         "stored_path": row.stored_path,
         "size_bytes": int(row.size_bytes or 0),
         "ingest_status": row.ingest_status,
+        "ingest_detail": row.ingest_detail,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
