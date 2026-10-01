@@ -104,6 +104,7 @@ def post_login():
             email=payload.get("email"),
             password=payload.get("password"),
             user_agent=_user_agent(),
+            client_address=request.remote_addr,
         )
     except AccountError as exc:
         return jsonify({"error": exc.message}), exc.status_code
