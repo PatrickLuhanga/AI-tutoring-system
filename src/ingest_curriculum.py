@@ -46,6 +46,7 @@ from .db import session_scope
 from .embeddings import get_embedder
 from .loaders import ContentFile, Section, count_skipped, extract_sections, iter_content_files
 from .models import CurriculumChunk
+from .unanswered import TUTOR_ANSWER_CATEGORY
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(message)s")
 logger = logging.getLogger("ingest_curriculum")
@@ -174,10 +175,42 @@ def ingest_file(
     return len(rows), False, answers
 
 
-def reset_table() -> None:
+def reset_table(*, include_curated: bool = False) -> None:
+    """Clear ``curriculum_chunks``, preserving promoted tutor answers by default.
+
+    ``--reset`` used to delete every row, including answers tutors had written
+    and promoted into the corpus through the Human Adjustment Cycle. Those rows
+    have **no file on disk**, so once deleted they were unrecoverable - the only
+    trace was a ``promoted_chunk_id`` on a queue row already marked resolved. A
+    routine re-ingest would silently throw away real teaching work.
+
+    They are now excluded and reported, so the operator decides. Pass
+    ``include_curated=True`` (``--reset-all``) to genuinely empty the table.
+    """
     with session_scope() as session:
-        session.execute(delete(CurriculumChunk))
-    logger.warning("Cleared all rows from curriculum_chunks (--reset)")
+        curated = int(
+            session.scalar(
+                select(func.count())
+                .select_from(CurriculumChunk)
+                .where(CurriculumChunk.source_category == TUTOR_ANSWER_CATEGORY)
+            )
+            or 0
+        )
+        if curated and not include_curated:
+            logger.warning(
+                "Preserving %d promoted tutor answer(s) (source_category=%s). They "
+                "exist only in the database, so deleting them is unrecoverable - "
+                "use --reset-all to remove them deliberately.",
+                curated,
+                TUTOR_ANSWER_CATEGORY,
+            )
+        stmt = delete(CurriculumChunk)
+        if not include_curated:
+            stmt = stmt.where(CurriculumChunk.source_category != TUTOR_ANSWER_CATEGORY)
+        result = session.execute(stmt)
+        logger.warning(
+            "Cleared %d row(s) from curriculum_chunks (--reset)", int(result.rowcount or 0)
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -186,7 +219,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--module", default=None, help="Only ingest one module folder, e.g. IPRT.")
     parser.add_argument("--max-files", type=int, default=None, help="Stop after N files (debug).")
     parser.add_argument("--dry-run", action="store_true", help="Chunk only; do not touch the database.")
-    parser.add_argument("--reset", action="store_true", help="Delete all existing rows first.")
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Delete existing rows first. Promoted tutor answers are preserved.",
+    )
+    parser.add_argument(
+        "--reset-all",
+        action="store_true",
+        help="With --reset, also delete promoted tutor answers. They exist only in "
+             "the database, so this is unrecoverable.",
+    )
     args = parser.parse_args(argv)
 
     content_dir = args.content_dir or settings.content_dir
@@ -195,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
                 settings.embedding_model_name, settings.embedding_dim, settings.embedding_backend)
 
     if not args.dry_run and args.reset:
-        reset_table()
+        reset_table(include_curated=args.reset_all)
 
     splitter = build_splitter()
     embedder = None if args.dry_run else get_embedder()

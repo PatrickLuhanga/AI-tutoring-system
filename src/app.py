@@ -60,18 +60,44 @@ def _configure_logging() -> None:
 
 
 def _configure_cors(app: Flask) -> None:
-    """Enable browser access for the Client Tier when flask-cors is available."""
+    """Enable browser access for the Client Tier when flask-cors is available.
+
+    A wildcard origin with credentialed requests is refused outright rather
+    than quietly honoured: browsers reject that combination anyway, and a
+    configuration that looks permissive but silently drops credentials is worse
+    than one that fails loudly and says what to set instead.
+
+    The wildcard is still the default, because in local development the Vite dev
+    server runs on a different port and nothing else is listening. It is
+    environment-controlled so a deployment can pin it without a code change.
+    """
     try:
         from flask_cors import CORS
     except ImportError:  # pragma: no cover - optional dependency
         logger.debug("flask-cors not installed; skipping CORS setup.")
         return
 
-    origins = [origin.strip() for origin in settings.cors_allowed_origins.split(",") if origin.strip()]
+    origins = [
+        origin.strip()
+        for origin in settings.cors_allowed_origins.split(",")
+        if origin.strip()
+    ] or ["*"]
+
+    wildcard = "*" in origins
+    if wildcard:
+        logger.warning(
+            "CORS_ALLOWED_ORIGINS is '*' - any origin may call the API. Fine for "
+            "local development; pin it to the deployed frontend origin before "
+            "hosting this anywhere."
+        )
+
     CORS(
         app,
-        resources={r"/api/*": {"origins": origins or "*"}},
+        resources={r"/api/*": {"origins": origins}},
         allow_headers=["Content-Type", "X-User-Email", "X-User-Role", "X-Admin-Key", "X-DUT4life-Token"],
+        # The session travels in an Authorization header, not a cookie, so the
+        # wildcard origin above is not paired with ambient credentials.
+        supports_credentials=False,
     )
 
 
