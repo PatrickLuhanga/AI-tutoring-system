@@ -27,6 +27,7 @@ from .config import settings
 from .db import session_scope
 from .loaders import THIRD_PARTY_CATEGORIES
 from .models import (
+    ANSWER_SOURCES,
     QUESTION_DIFFICULTIES,
     QUESTION_ORIGINS,
     CurriculumChunk,
@@ -55,6 +56,17 @@ def _clean_origin(value: object, default: str = "authored") -> str:
     return text if text in QUESTION_ORIGINS else default
 
 
+def _clean_answer_source(value: object) -> Optional[str]:
+    """Normalise an answer source. Anything unrecognised becomes None.
+
+    None means "nothing vouched for this answer", which is the safe outcome: an
+    unrecognised label is not treated as ``authored`` and so is never marked
+    against automatically.
+    """
+    text = str(value or "").strip().lower()
+    return text if text in ANSWER_SOURCES else None
+
+
 # ---------------------------------------------------------------------------
 # Bank management
 # ---------------------------------------------------------------------------
@@ -64,11 +76,17 @@ def add_question(
     prompt: object,
     created_by: Optional[int],
     answer_notes: object = None,
+    answer_source: object = None,
     difficulty: object = "medium",
     origin: object = "authored",
     source_label: object = None,
 ) -> dict:
-    """Add one question to the bank."""
+    """Add one question to the bank.
+
+    ``answer_source`` decides whether the answer may be auto-graded; see
+    ``Question.answer_source``. An answer with no source set is never marked
+    against, because nothing vouched for it.
+    """
     text = str(prompt or "").strip()
     if len(text) < 8:
         raise PracticeError("A question needs at least a few words of prompt.")
@@ -77,6 +95,7 @@ def add_question(
             module_id=str(module_id).strip().upper(),
             prompt=text,
             answer_notes=(str(answer_notes).strip() or None) if answer_notes else None,
+            answer_source=_clean_answer_source(answer_source),
             difficulty=_clean_difficulty(difficulty),
             origin=_clean_origin(origin),
             source_label=(str(source_label).strip() or None) if source_label else None,
@@ -200,23 +219,41 @@ def mark_attempt(
         for qid in wanted:
             row = rows[qid]
             given = _normalise(str((answers or {}).get(str(qid), "")))
-            expected = _normalise(row.answer_notes or "")
-            # An unmarkable question is not counted as wrong; it would penalise
-            # the student for the bank, not for their own answer.
-            markable = bool(expected)
+
+            # Only a human-authored answer may be marked against automatically.
+            # Marking is exact match, so an answer the *model* drafted is a trap:
+            # if it is subtly wrong, a student who answered correctly is scored
+            # wrong, which penalises them for the bank's inaccuracy. A drafted
+            # answer is shown as a reference for the student to self-assess
+            # against instead.
+            gradeable = row.answer_source == "authored"
+            expected = _normalise(row.answer_notes or "") if gradeable else ""
+            markable = gradeable and bool(expected)
             hit = markable and given == expected
             if hit:
                 correct += 1
+
+            has_answer = bool((row.answer_notes or "").strip())
+            if not has_answer:
+                mode = "none"
+            elif gradeable:
+                mode = "auto"
+            else:
+                mode = "reference"
+
             breakdown.append(
                 {
                     "question_id": qid,
                     "correct": hit,
                     "markable": markable,
-                    "answer_notes": row.answer_notes if markable else None,
+                    "mode": mode,
+                    "answer_notes": row.answer_notes if has_answer else None,
                 }
             )
 
         markable_count = sum(1 for b in breakdown if b["markable"])
+        reference_count = sum(1 for b in breakdown if b["mode"] == "reference")
+        no_answer_count = sum(1 for b in breakdown if b["mode"] == "none")
         attempt = PracticeAttempt(
             student_id=student_id,
             user_id=user_id,
@@ -238,6 +275,11 @@ def mark_attempt(
         "score": correct,
         "max_score": markable_count,
         "unmarked": len(breakdown) - markable_count,
+        # Reported separately so the UI can say why the score is what it is,
+        # rather than showing a bare number that looks broken when nothing could
+        # be marked.
+        "reference_only": reference_count,
+        "no_answer": no_answer_count,
         "breakdown": breakdown,
     }
 
@@ -484,6 +526,7 @@ def _to_dict(row: Question, *, include_answer: bool) -> dict:
         "prompt": row.prompt,
         "difficulty": row.difficulty,
         "origin": row.origin,
+        "answer_source": row.answer_source,
         "source_label": row.source_label,
         "is_active": bool(row.is_active),
         "created_at": row.created_at.isoformat() if row.created_at else None,

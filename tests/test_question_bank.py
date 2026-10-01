@@ -279,7 +279,13 @@ def test_export_does_not_carry_database_specific_columns(tmp_path, fixture):
     payload = export_bank(out)
     for entry in payload["questions"]:
         assert set(entry) == {
-            "module_id", "prompt", "answer_notes", "difficulty", "origin", "source_label"
+            "module_id",
+            "prompt",
+            "answer_notes",
+            "answer_source",
+            "difficulty",
+            "origin",
+            "source_label",
         }
 
 

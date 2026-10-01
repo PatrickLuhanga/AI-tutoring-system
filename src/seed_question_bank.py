@@ -50,7 +50,19 @@ DEFAULT_FIXTURE = Path(__file__).resolve().parent.parent / "exam_papers" / "ques
 #: deliberately excluded: the first is database-specific, the second refers to a
 #: user that does not exist on another machine, and the third should reflect when
 #: the row was actually loaded rather than when the fixture was authored.
-CARRIED = ("module_id", "prompt", "answer_notes", "difficulty", "origin", "source_label")
+#:
+#: ``answer_source`` is carried because dropping it would promote every
+#: model-drafted answer into an auto-graded key on reload - marking is exact
+#: match, so a wrong draft would then mark correct student answers wrong.
+CARRIED = (
+    "module_id",
+    "prompt",
+    "answer_notes",
+    "answer_source",
+    "difficulty",
+    "origin",
+    "source_label",
+)
 
 #: Substrings that mark a row as seeder output rather than lecturer authoring.
 MANAGED_MARKERS = ("(OCR - verify)", "AI-generated for revision")
@@ -167,6 +179,7 @@ def load_bank(
                 module_id=entry["module_id"],
                 prompt=entry["prompt"],
                 answer_notes=entry.get("answer_notes"),
+                answer_source=entry.get("answer_source"),
                 difficulty=entry.get("difficulty") or "medium",
                 origin=entry.get("origin") or "past_paper",
                 source_label=entry.get("source_label"),

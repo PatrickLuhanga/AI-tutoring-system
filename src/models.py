@@ -75,6 +75,13 @@ QUESTION_DIFFICULTIES = ("easy", "medium", "hard")
 #: How a practice question came to exist.
 QUESTION_ORIGINS = ("authored", "past_paper", "generated")
 
+#: Who wrote a question's ``answer_notes``. See ``Question.answer_source``.
+ANSWER_SOURCES = ("authored", "generated")
+
+#: How well a chatbot turn was grounded in the module's material. See
+#: :class:`ChatTurn`.
+GROUNDING_LEVELS = ("grounded", "weak", "ungrounded")
+
 #: Who a notification is addressed to.
 NOTIFICATION_AUDIENCES = ("all", "module", "role", "user")
 
@@ -119,8 +126,18 @@ LLM_PROVIDERS = ("local", "cloud")
 CLOUD_PROVIDERS = ("openai", "openai_compatible", "azure_openai", "anthropic")
 
 
-def _enum_check(column: str, values: tuple[str, ...], name: str) -> CheckConstraint:
+def _enum_check(
+    column: str,
+    values: tuple[str, ...],
+    name: str,
+    *,
+    nullable: bool = False,
+) -> CheckConstraint:
     rendered = ", ".join(f"'{value}'" for value in values)
+    if nullable:
+        # A CHECK passes on NULL in SQL, so this only has to exclude values
+        # outside the set; the NULL case is already allowed.
+        return CheckConstraint(f"{column} IS NULL OR {column} IN ({rendered})", name=name)
     return CheckConstraint(f"{column} IN ({rendered})", name=name)
 
 
@@ -451,6 +468,70 @@ class HintFeedback(Base):
     )
 
 
+class ChatTurn(Base):
+    """One persisted chatbot exchange.
+
+    :class:`TelemetryLog` deliberately records routing metadata only - it is the
+    hot path and carries no text. That left a gap: a tutor reviewing how their
+    module is being used could only see questions RAG had *failed* on, because
+    :class:`UnansweredQuestion` is the sole table holding what a student actually
+    asked. A student confused by a well-grounded but unhelpful answer left no
+    trace at all, which is the other half of what the Human Adjustment Cycle is
+    supposed to surface.
+
+    This table closes that gap by storing every turn, grounded or not. It is
+    deliberately separate from the tutor queue: ``unanswered_questions`` is a
+    short worklist of real curriculum gaps to fix, while this is the record of
+    what happened. A row here is not a request for attention.
+
+    Retention is the operational concern. This is students' conversation content,
+    so it is the most sensitive thing the application stores.
+    """
+
+    __tablename__ = "chat_turns"
+
+    turn_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    message_id: Mapped[Optional[str]] = mapped_column(String(64))
+
+    #: The login account, when there was one. Separate from ``student_id`` so a
+    #: tutor's own exploration of the system is attributable to them too.
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.user_id", ondelete="SET NULL")
+    )
+    student_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("students.student_id", ondelete="SET NULL"), index=True
+    )
+    module_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("modules.module_id", ondelete="CASCADE"), index=True
+    )
+
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    answer_text: Mapped[Optional[str]] = mapped_column(Text)
+
+    intent: Mapped[Optional[str]] = mapped_column(String(32))
+    #: ``grounded`` | ``weak`` | ``ungrounded`` - see ``GROUNDING_LEVELS``.
+    grounding: Mapped[str] = mapped_column(String(16), nullable=False, server_default="ungrounded")
+    #: Chunks cited for this turn, for "which material is actually being used".
+    cited_chunk_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    guardrail_flagged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    #: Whether the turn was a bypass attempt, which is a teaching signal rather
+    #: than a curriculum gap and is excluded from the tutor's normal view.
+    was_bypass: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    response_latency_ms: Mapped[Optional[int]] = mapped_column(Integer)
+
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
+    )
+
+    __table_args__ = (
+        _enum_check("grounding", GROUNDING_LEVELS, "ck_chat_turns_grounding"),
+        Index("ix_chat_turns_module_created", "module_id", "created_at"),
+    )
+
+
 class UnansweredQuestion(Base):
     """A student question the tutor could not ground in course material.
 
@@ -636,8 +717,22 @@ class Question(Base):
         ForeignKey("users.user_id", ondelete="SET NULL")
     )
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
-    #: Marking notes or the expected answer. Never sent to the student.
+    #: Marking notes or the expected answer. Never sent to the student until the
+    #: attempt is submitted.
     answer_notes: Mapped[Optional[str]] = mapped_column(Text)
+    #: Who wrote ``answer_notes``, which decides whether it may be auto-graded.
+    #:
+    #: ``authored`` - a lecturer wrote it. This is the only kind that is safe to
+    #: mark against automatically, because a human set it as the expected answer.
+    #:
+    #: ``generated`` - the local model drafted it. Shown to the student as a
+    #: reference, and deliberately **not** auto-graded. Auto-marking is exact
+    #: match, so a drafted answer that is subtly wrong would mark a correct
+    #: student response as wrong - penalising the student for the bank's
+    #: inaccuracy. The student self-assesses against it instead.
+    #:
+    #: NULL means there is no answer, and the question is excluded from the score.
+    answer_source: Mapped[Optional[str]] = mapped_column(String(16))
     #: ``easy`` | ``medium`` | ``hard``
     difficulty: Mapped[str] = mapped_column(String(16), nullable=False, server_default="medium")
     #: Where it came from: ``authored`` | ``past_paper`` | ``generated``
@@ -653,6 +748,12 @@ class Question(Base):
     __table_args__ = (
         _enum_check("difficulty", QUESTION_DIFFICULTIES, "ck_questions_difficulty"),
         _enum_check("origin", QUESTION_ORIGINS, "ck_questions_origin"),
+        _enum_check(
+            "answer_source",
+            ANSWER_SOURCES,
+            "ck_questions_answer_source",
+            nullable=True,
+        ),
         Index("ix_questions_module_active", "module_id", "is_active"),
     )
 
@@ -768,6 +869,10 @@ class UploadedDocument(Base):
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     #: ``pending`` | ``ingested`` | ``failed`` - whether the notes pipeline ran.
     ingest_status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending")
+    #: Human-readable outcome of processing - how many chunks were indexed, how
+    #: many questions were recovered, or why it failed. Shown in the Content
+    #: console so "pending" is never the final word on an upload.
+    ingest_detail: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
