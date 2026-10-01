@@ -89,6 +89,9 @@ class ChatRequest:
     session_id: str
     student_id: Optional[int] = None
     student_email: Optional[str] = None
+    #: The login account, distinct from ``student_id``. Needed so a stored chat
+    #: turn is attributable to a user even where no directory row exists yet.
+    user_id: Optional[int] = None
     history: list[dict[str, str]] = field(default_factory=list)
 
 
@@ -184,6 +187,19 @@ class TutoringWorkflow:
             allow_direct=direct,
         )
         latency_ms = int((time.perf_counter() - started) * 1000)
+
+        # Every exchange is recorded, grounded or not. Telemetry carries routing
+        # metadata only, so without this the only student questions a tutor could
+        # read were the ones RAG had already failed on.
+        self._record_turn(
+            request=request,
+            intent=intent,
+            retrieval=retrieval,
+            audit=audit,
+            message_id=message_id,
+            answer_text=draft.text,
+            latency_ms=latency_ms,
+        )
 
         # Human Adjustment Cycle (section 17): if RAG could not ground the
         # question, queue it for a tutor instead of letting the model answer from
@@ -437,6 +453,48 @@ class TutoringWorkflow:
         # textbook chunks is presented to the student as course material.
         merged.sync_third_party_flag()
         return merged
+
+    @staticmethod
+    def _record_turn(
+        *,
+        request: ChatRequest,
+        intent: Intent,
+        retrieval: RetrievalResult,
+        audit: GuardrailResult,
+        message_id: str,
+        answer_text: Optional[str],
+        latency_ms: Optional[int] = None,
+    ) -> None:
+        """Persist the exchange, grounded or not.
+
+        ``telemetry_logs`` records routing metadata only, so without this a
+        student asking something well-grounded-but-unhelpful left no record at
+        all - and the tutor queue could only ever show RAG failures. That is half
+        the Human Adjustment Cycle missing.
+
+        Best-effort: a failure here must never cost the student their answer.
+        """
+        try:
+            from ..chatlog import record_turn
+
+            grounded = not retrieval.is_empty
+            record_turn(
+                session_id=request.session_id,
+                message_id=message_id,
+                user_id=request.user_id,
+                student_id=request.student_id,
+                module_id=request.module_id,
+                question_text=request.message,
+                answer_text=answer_text,
+                intent=intent.label,
+                grounding="grounded" if grounded else "ungrounded",
+                cited_chunk_ids=[c.chunk_id for c in retrieval.chunks],
+                guardrail_flagged=bool(audit.flagged),
+                was_bypass=intent.label == "bypass",
+                response_latency_ms=latency_ms,
+            )
+        except Exception as exc:  # noqa: BLE001 - telemetry must not break a reply
+            logger.warning("Could not record the chat turn: %s", exc)
 
     @staticmethod
     def _queue_if_ungrounded(

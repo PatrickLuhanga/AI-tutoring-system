@@ -168,6 +168,96 @@ def _admin_clear(key: str) -> None:
         _admin_attempts.pop(key, None)
 
 
+# ---------------------------------------------------------------------------
+# Login throttling
+# ---------------------------------------------------------------------------
+#: Failed password attempts per client address.
+#:
+#: ``login`` was the one authentication path with no rate limit at all, while the
+#: admin signup guard right above already had one - so the shared secret was the
+#: best-protected credential in the system and an ordinary account's password was
+#: brute-forceable at whatever rate the network allowed.
+#:
+#: Two buckets, because there are two things worth limiting. The address bucket
+#: stops a single host spraying many accounts. The per-account bucket stops one
+#: account being sprayed from many hosts, which the address bucket alone would
+#: never notice.
+#:
+#: In-process only: under multiple workers each gets its own bucket. A shared
+#: store would be the fix, and the limits are set low enough to still bite.
+_LOGIN_ATTEMPT_LIMIT = 5
+_LOGIN_ACCOUNT_LIMIT = 10
+_LOGIN_LOCKOUT_SECONDS = 300
+_login_address_attempts: dict[str, list[float]] = {}
+_login_account_attempts: dict[str, list[float]] = {}
+_login_lock = threading.Lock()
+
+
+def _throttle_key(address: Optional[str]) -> str:
+    return (address or "unknown").strip().lower()
+
+
+def _lockout_remaining(bucket: dict[str, list[float]], key: str, limit: int, now: float) -> Optional[int]:
+    """Seconds left on the lockout for ``key``, or None if not locked."""
+    with _login_lock:
+        recent = [t for t in bucket.get(key, []) if now - t < _LOGIN_LOCKOUT_SECONDS]
+        if recent:
+            bucket[key] = recent
+        else:
+            bucket.pop(key, None)
+        if len(recent) >= limit:
+            return max(0, int(_LOGIN_LOCKOUT_SECONDS - (now - recent[0]) + 1))
+    return None
+
+
+def _record_failure(bucket: dict[str, list[float]], key: str, now: float) -> int:
+    with _login_lock:
+        entries = bucket.setdefault(key, [])
+        entries.append(now)
+        bucket[key] = [t for t in entries if now - t < _LOGIN_LOCKOUT_SECONDS]
+        return len(bucket[key])
+
+
+def _clear_failure(bucket: dict[str, list[float]], key: str) -> None:
+    with _login_lock:
+        bucket.pop(key, None)
+
+
+def _guard_login_rate(identifier: str, client_address: Optional[str]) -> None:
+    """Refuse a login while either bucket is locked out.
+
+    Raises **before** any password check, so a locked-out caller cannot use the
+    endpoint's response to learn whether an account exists.
+    """
+    now = time.monotonic()
+    address_key = _throttle_key(client_address)
+    account_key = identifier.strip().lower()
+
+    remaining = _lockout_remaining(
+        _login_address_attempts, address_key, _LOGIN_ATTEMPT_LIMIT, now
+    )
+    if remaining is None:
+        remaining = _lockout_remaining(
+            _login_account_attempts, account_key, _LOGIN_ACCOUNT_LIMIT, now
+        )
+    if remaining is not None:
+        raise AccountError(
+            f"Too many failed sign-in attempts. Try again in {remaining} seconds.",
+            status_code=429,
+        )
+
+
+def _record_login_failure(identifier: str, client_address: Optional[str]) -> None:
+    now = time.monotonic()
+    _record_failure(_login_address_attempts, _throttle_key(client_address), now)
+    _record_failure(_login_account_attempts, identifier.strip().lower(), now)
+
+
+def _clear_login_failures(identifier: str, client_address: Optional[str]) -> None:
+    _clear_failure(_login_address_attempts, _throttle_key(client_address))
+    _clear_failure(_login_account_attempts, identifier.strip().lower())
+
+
 def _guard_admin_signup(presented: str, client_address: Optional[str] = None) -> None:
     """Authorise a System Admin registration against the shared secret.
 
@@ -316,13 +406,23 @@ def _assert_modules_exist(module_ids: Sequence[str]) -> list[str]:
     return unique
 
 
-def _link_student_record(email: str, student_number: Optional[str]) -> Optional[int]:
-    """Attach a student account to its directory row so telemetry/enrolment work.
+def _link_student_record(
+    email: str, student_number: Optional[str], full_name: Optional[str] = None
+) -> Optional[int]:
+    """Attach a student account to its directory row, creating one if needed.
 
-    The signup does not create a ``students`` row: that table is the academic
-    directory and is populated by the DUT sync, not by the public. If a row
-    already exists we link to it; if not, the account still works and
-    ``student_id`` stays null until the directory catches up.
+    Telemetry, enrolment and module announcements all key off ``student_id``, so an
+    account without one is invisible to them: its chat turns cannot be attributed
+    and it never receives a module announcement.
+
+    The academic directory is meant to be populated by the DUT sync, but until
+    that exists a self-registered student would have no row at all - which is why
+    every one of them had ``student_id = NULL``. So signup creates the row from
+    the details the student supplied, and the sync reconciles it later by email or
+    student number rather than having to insert one.
+
+    A pre-existing row always wins: the directory is authoritative about identity,
+    and a signup must never overwrite it.
     """
     with session_scope() as session:
         student = session.execute(
@@ -332,7 +432,29 @@ def _link_student_record(email: str, student_number: Optional[str]) -> Optional[
             student = session.execute(
                 select(Student).where(Student.student_number == student_number).limit(1)
             ).scalar_one_or_none()
-        return int(student.student_id) if student is not None else None
+        if student is not None:
+            return int(student.student_id)
+
+        student = Student(
+            student_number=student_number,
+            dut4life_email=email,
+            full_name=(str(full_name).strip() or None) if full_name else None,
+        )
+        session.add(student)
+        try:
+            session.flush()
+        except IntegrityError:
+            # Raced with the DUT sync or another signup; re-read and link.
+            session.rollback()
+            student = session.execute(
+                select(Student).where(Student.dut4life_email == email).limit(1)
+            ).scalar_one_or_none()
+            if student is None and student_number:
+                student = session.execute(
+                    select(Student).where(Student.student_number == student_number).limit(1)
+                ).scalar_one_or_none()
+            return int(student.student_id) if student is not None else None
+        return int(student.student_id)
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +493,11 @@ def create_account(
     if clean_role in MODULE_SCOPED_ROLES and not granted:
         raise AccountError("Select at least one module you teach.")
 
-    student_id = _link_student_record(clean_email, clean_number) if clean_role == "student" else None
+    student_id = (
+        _link_student_record(clean_email, clean_number, full_name=full_name)
+        if clean_role == "student"
+        else None
+    )
 
     with session_scope() as session:
         existing = session.execute(
@@ -421,23 +547,38 @@ def create_account(
     return result, token
 
 
-def login(*, email: object, password: object, user_agent: Optional[str] = None) -> tuple[AuthenticatedUser, str]:
+def login(
+    *,
+    email: object,
+    password: object,
+    user_agent: Optional[str] = None,
+    client_address: Optional[str] = None,
+) -> tuple[AuthenticatedUser, str]:
     """Verify a password and open a session.
 
     Returns the user and the one-time bearer token. The same message is used for
     an unknown address and a wrong password so the endpoint cannot be used to
     enumerate registered accounts.
+
+    Failed attempts are throttled per client address *and* per account; see
+    :func:`_guard_login_rate`. Both are checked before the password is compared,
+    so a locked-out caller learns nothing about whether the account exists.
     """
     clean_email = str(email or "").strip().lower()
     bad = AccountError("Email or password is incorrect.", status_code=401)
+
+    _guard_login_rate(clean_email, client_address)
 
     with session_scope() as session:
         user = session.execute(
             select(User).where(User.email == clean_email).limit(1)
         ).scalar_one_or_none()
         if user is None or not check_password_hash(user.password_hash, str(password or "")):
+            _record_login_failure(clean_email, client_address)
             raise bad
         if user.status != "active":
+            # Not a failed guess, so it must not consume an attempt - but it is
+            # also not a success, so the bucket is left as it was.
             raise AccountError(
                 "This account has been suspended. Contact your System Admin.", status_code=403
             )
@@ -454,6 +595,7 @@ def login(*, email: object, password: object, user_agent: Optional[str] = None) 
             session_id=session_id,
         )
 
+    _clear_login_failures(clean_email, client_address)
     logger.info("Login: %s (%s)", resolved.email, resolved.role)
     return resolved, token
 

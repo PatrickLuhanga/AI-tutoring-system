@@ -68,6 +68,7 @@ def chat():
         session_id=session_id,
         student_id=identity.student_id,
         student_email=identity.email,
+        user_id=identity.user_id,
         history=_clean_history(payload.get("history")),
     )
 

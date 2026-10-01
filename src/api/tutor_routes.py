@@ -8,6 +8,7 @@ Routes
 ------
 ``GET  /api/tutor/questions``              the queue, most-demanded first
 ``GET  /api/tutor/questions/summary``      counts for the dashboard header
+``GET  /api/tutor/conversations``          recent student exchanges, any grounding
 ``POST /api/tutor/questions/<id>/answer``  answer it, optionally promoting to corpus
 ``POST /api/tutor/questions/<id>/dismiss`` close it without an answer
 """
@@ -19,6 +20,7 @@ import logging
 from flask import Blueprint, jsonify, request
 
 from ..auth import AuthError, resolve_identity
+from ..chatlog import list_turns, turn_counts
 from ..unanswered import (
     TutorScope,
     answer_question,
@@ -84,6 +86,66 @@ def get_summary():
     identity, scope = _scope()
     _require_tutor(identity)
     return jsonify(summary(scope)), 200
+
+
+@tutor_bp.get("/conversations")
+def get_conversations():
+    """Recent student exchanges in the caller's modules, whatever the grounding.
+
+    The queue above only holds questions RAG could not answer. This holds every
+    recorded turn, so a tutor can also see the exchanges that *were* grounded but
+    where the student still came away confused - the other half of what the
+    Human Adjustment Cycle is meant to surface.
+
+    Scope comes from ``resolve_tutor_scope`` and never from the query string, so
+    a tutor cannot widen it by asking for another module.
+    """
+    identity, scope = _require_tutor_scope(request)
+    if scope.is_admin and (request.args.get("scope") or "").lower() == "all":
+        modules = [m.module_id for m in _all_modules()]
+    else:
+        modules = list(scope.module_ids)
+
+    grounding = (request.args.get("grounding") or "").strip().lower() or None
+    search = (request.args.get("q") or "").strip() or None
+    try:
+        limit = int(request.args.get("limit", 100))
+    except ValueError:
+        limit = 100
+
+    rows = list_turns(module_ids=modules, grounding=grounding, search=search, limit=limit)
+    return (
+        jsonify(
+            {
+                "scope": {
+                    "role": identity.role,
+                    "is_admin": scope.is_admin,
+                    "modules": sorted(modules),
+                },
+                "count": len(rows),
+                "counts": turn_counts(module_ids=modules),
+                "conversations": rows,
+            }
+        ),
+        200,
+    )
+
+
+def _require_tutor_scope(req):
+    """Resolve identity and scope together, refusing a non-staff caller."""
+    identity, scope = _scope()
+    _require_tutor(identity)
+    return identity, scope
+
+
+def _all_modules():
+    from ..models import Module
+    from sqlalchemy import select
+
+    from ..db import session_scope
+
+    with session_scope() as session:
+        return session.execute(select(Module)).scalars().all()
 
 
 @tutor_bp.post("/questions/<int:question_id>/answer")
