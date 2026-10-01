@@ -9,6 +9,9 @@ interface BankQuestion {
   prompt: string
   difficulty: string
   origin: string
+  /** Who wrote the answer: 'authored' | 'generated' | null. Drives grading. */
+  answer_source: 'authored' | 'generated' | null
+  answer_notes: string | null
   source_label: string | null
 }
 
@@ -188,6 +191,39 @@ function BankTab({ moduleId, onError, onOk }: { moduleId: string; onError: (s: s
     }
   }
 
+  /**
+   * Approve a drafted answer, making it a marking key.
+   *
+   * A `generated` answer is shown to students as a reference but never scored,
+   * because the model wrote it and exact-match marking against a wrong draft
+   * would penalise a student who answered correctly. So a seeded bank scores
+   * nothing until a lecturer reads a question, agrees the answer is right, and
+   * says so here. Editing the text alone deliberately does *not* do this.
+   */
+  async function approve(row: BankQuestion) {
+    setBusy(true)
+    onError('')
+    onOk('')
+    try {
+      const res = await fetch(`/api/practice/bank/${row.question_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
+        },
+        body: JSON.stringify({ answer_source: 'authored' }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? `${res.status}`)
+      onOk('Approved. This answer is now marked automatically.')
+      await load()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -246,10 +282,43 @@ function BankTab({ moduleId, onError, onOk }: { moduleId: string; onError: (s: s
               key={q.question_id}
               className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
             >
-              <span className="flex-1 text-sm text-slate-800">{q.prompt}</span>
+              <span className="flex-1 text-sm text-slate-800">
+                {q.prompt}
+                {q.answer_notes && q.answer_source === 'generated' && (
+                  <span className="mt-1 block rounded bg-slate-50 px-2 py-1 text-xs text-slate-600">
+                    <span className="font-medium text-slate-500">Draft answer:</span>{' '}
+                    {q.answer_notes}
+                  </span>
+                )}
+              </span>
               <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
                 {q.origin === 'generated' ? 'AI' : q.difficulty}
               </span>
+              {q.answer_source === 'generated' ? (
+                <button
+                  type="button"
+                  onClick={() => void approve(q)}
+                  disabled={busy}
+                  title="Check the answer is right, then approve it for automatic marking"
+                  className="shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                >
+                  Approve answer
+                </button>
+              ) : q.answer_source === 'authored' ? (
+                <span
+                  title="Marked automatically against this answer"
+                  className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-700"
+                >
+                  Marked
+                </span>
+              ) : (
+                <span
+                  title="No answer recorded, so this question is left out of the score"
+                  className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500"
+                >
+                  No answer
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => void retire(q.question_id)}
@@ -261,6 +330,15 @@ function BankTab({ moduleId, onError, onOk }: { moduleId: string; onError: (s: s
             </li>
           ))}
         </ul>
+      )}
+
+      {rows.length > 0 && (
+        <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+          A drafted answer is shown to students as a reference but is{' '}
+          <strong>never scored</strong> — marking is exact match, so a draft that is
+          subtly wrong would mark a correct student answer wrong. Approving an
+          answer is what makes a question count towards the score.
+        </p>
       )}
     </div>
   )

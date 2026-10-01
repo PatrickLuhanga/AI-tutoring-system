@@ -13,7 +13,14 @@ import pytest
 
 from src.db import session_scope
 from src.models import Question
-from src.practice import PracticeError, add_question, draw_test, mark_attempt
+from src.practice import (
+    PracticeError,
+    add_question,
+    draw_test,
+    get_question,
+    mark_attempt,
+    update_question,
+)
 
 MODULE = "IPRT301"
 
@@ -36,13 +43,14 @@ def _clean():
     purge()
 
 
-def _q(prompt: str, *, answer=None, answer_source=None) -> dict:
+def _q(prompt: str, *, answer=None, answer_source=None, difficulty="medium") -> dict:
     return add_question(
         module_id=MODULE,
         prompt=prompt,
         created_by=None,
         answer_notes=answer,
         answer_source=answer_source,
+        difficulty=difficulty,
         origin="authored",
     )
 
@@ -124,6 +132,67 @@ def test_a_question_with_no_answer_at_all_is_reported_separately():
     assert result["no_answer"] == 1
     assert result["reference_only"] == 0
     assert result["unmarked"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Approving a draft: the only way a seeded question ever starts being scored
+# ---------------------------------------------------------------------------
+def test_approving_a_draft_turns_it_into_a_marked_question():
+    q = _q(P_A, answer="An interface decouples client from implementation.", answer_source="generated")
+
+    before = mark_attempt(
+        module_id=MODULE,
+        question_ids=[q["question_id"]],
+        answers={str(q["question_id"]): "An interface decouples client from implementation."},
+        student_id=None, user_id=None,
+    )
+    assert before["max_score"] == 0
+
+    update_question(q["question_id"], answer_source="authored")
+
+    after = mark_attempt(
+        module_id=MODULE,
+        question_ids=[q["question_id"]],
+        answers={str(q["question_id"]): "An interface decouples client from implementation."},
+        student_id=None, user_id=None,
+    )
+    assert after["max_score"] == 1
+    assert after["score"] == 1
+    assert after["breakdown"][0]["mode"] == "auto"
+
+
+def test_editing_an_answer_does_not_silently_promote_it():
+    """Tidying a typo in a draft must not turn it into a marking key."""
+    q = _q(P_B, answer="An abstract base class.", answer_source="generated")
+    updated = update_question(q["question_id"], answer_notes="An abstract base class, revised.")
+    assert updated["answer_source"] == "generated"
+
+
+def test_clearing_the_answer_clears_its_source():
+    """A source with no answer would imply a key exists for a question without one."""
+    q = _q(P_C, answer="Dynamic binding links an override.", answer_source="authored")
+    updated = update_question(q["question_id"], answer_notes=None, answer_source="authored")
+    assert updated["answer_notes"] is None
+    assert updated["answer_source"] is None
+
+
+def test_an_update_touches_only_the_fields_supplied():
+    q = _q(P_A, answer="An interface decouples.", answer_source="generated", difficulty="easy")
+    updated = update_question(q["question_id"], difficulty="hard")
+    assert updated["difficulty"] == "hard"
+    assert updated["answer_notes"] == "An interface decouples."
+    assert updated["prompt"] == P_A
+
+
+def test_an_unknown_field_is_refused():
+    q = _q(P_C, answer="An answer here.")
+    with pytest.raises(PracticeError, match="Cannot update"):
+        update_question(q["question_id"], nonsense="x")
+
+
+def test_updating_a_missing_question_returns_none():
+    assert update_question(999_999_999, difficulty="easy") is None
+    assert get_question(999_999_999) is None
 
 
 # ---------------------------------------------------------------------------

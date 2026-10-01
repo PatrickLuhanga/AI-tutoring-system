@@ -155,7 +155,13 @@ def test_lecturer_cannot_write_to_a_module_they_do_not_teach(client):
     assert res.status_code == 403
 
 
-def test_bank_listing_never_exposes_the_answer(client, monkeypatch, settings):
+def test_the_staff_bank_listing_does_expose_answers(client, monkeypatch, settings):
+    """Staff must be able to read the answer they are being asked to approve.
+
+    Approving a drafted answer is what turns it into a marking key, and that is
+    impossible without seeing it. The student-facing listing still withholds
+    answers - see ``test_the_student_question_listing_never_exposes_the_answer``.
+    """
     from dataclasses import replace
 
     from src import accounts as acc
@@ -168,12 +174,83 @@ def test_bank_listing_never_exposes_the_answer(client, monkeypatch, settings):
         json={
             "module_id": "IPRT301",
             "prompt": "Explain why a Singleton class has a private constructor.",
-            "answer_notes": "SECRET-MARKING-NOTE",
+            "answer_notes": "MARKING-NOTE-FOR-STAFF",
         },
     )
     res = client.get("/api/practice/bank?module_id=IPRT301", headers=_auth(tok))
     assert res.status_code == 200
-    assert "SECRET-MARKING-NOTE" not in res.get_data(as_text=True)
+    body = res.get_json()
+    row = next(q for q in body["questions"] if q["prompt"].startswith("Explain why a Singleton"))
+    assert row["answer_notes"] == "MARKING-NOTE-FOR-STAFF"
+    assert row["answer_source"] == "authored"
+
+
+def test_the_student_question_listing_never_exposes_the_answer(client, monkeypatch, settings):
+    """The student route must never carry an answer, even once one is authored."""
+    from dataclasses import replace
+
+    from src import accounts as acc
+
+    monkeypatch.setattr(acc, "settings", replace(settings, admin_signup_secret="svc-admin-secret"))
+    lecturer = _register(client, "lecturer", modules=["IPRT301"]).get_json()["token"]
+    client.post(
+        "/api/practice/bank",
+        headers=_auth(lecturer),
+        json={
+            "module_id": "IPRT301",
+            "prompt": "Explain why a Singleton class has a private constructor.",
+            "answer_notes": "MARKING-NOTE-FOR-STAFF",
+        },
+    )
+
+    student = _register(client, "student").get_json()["token"]
+    res = client.get("/api/practice/questions?module_id=IPRT301", headers=_auth(student))
+    assert res.status_code == 200
+    assert "MARKING-NOTE-FOR-STAFF" not in res.get_data(as_text=True)
+
+
+def test_approving_a_draft_requires_staff_and_the_right_module(client, monkeypatch, settings):
+    from dataclasses import replace
+
+    from src import accounts as acc
+
+    monkeypatch.setattr(acc, "settings", replace(settings, admin_signup_secret="svc-admin-secret"))
+    lecturer = _register(client, "lecturer", modules=["IPRT301"]).get_json()["token"]
+    created = client.post(
+        "/api/practice/bank",
+        headers=_auth(lecturer),
+        json={
+            "module_id": "IPRT301",
+            "prompt": "Explain why an interface decouples a client from its implementation.",
+            "answer_notes": "A draft answer.",
+            "answer_source": "generated",
+        },
+    ).get_json()["question"]
+
+    student = _register(client, "student").get_json()["token"]
+    forbidden = client.patch(
+        f"/api/practice/bank/{created['question_id']}",
+        headers=_auth(student),
+        json={"answer_source": "authored"},
+    )
+    assert forbidden.status_code == 403
+
+    # A lecturer for a different module must not approve it either.
+    other = _register(client, "lecturer", modules=["SPRI301"]).get_json()["token"]
+    wrong_module = client.patch(
+        f"/api/practice/bank/{created['question_id']}",
+        headers=_auth(other),
+        json={"answer_source": "authored"},
+    )
+    assert wrong_module.status_code == 403
+
+    allowed = client.patch(
+        f"/api/practice/bank/{created['question_id']}",
+        headers=_auth(lecturer),
+        json={"answer_source": "authored"},
+    )
+    assert allowed.status_code == 200
+    assert allowed.get_json()["question"]["answer_source"] == "authored"
 
 
 def test_drawn_test_never_carries_the_answer(client, monkeypatch, settings):

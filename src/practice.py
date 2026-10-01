@@ -84,18 +84,35 @@ def add_question(
     """Add one question to the bank.
 
     ``answer_source`` decides whether the answer may be auto-graded; see
-    ``Question.answer_source``. An answer with no source set is never marked
-    against, because nothing vouched for it.
+    ``Question.answer_source``.
+
+    Supplying an answer with no explicit source defaults to ``'authored'``:
+    this is the staff path, so someone typed that answer themselves. Leaving it
+    unset would mean a lecturer writes a marking note, the question appears in a
+    test, and it is silently excluded from the score because nothing vouched for
+    it. Callers that did *not* write the answer - the OCR seeder, the model
+    generator - pass ``'generated'`` explicitly, or supply no answer at all.
     """
     text = str(prompt or "").strip()
     if len(text) < 8:
         raise PracticeError("A question needs at least a few words of prompt.")
+
+    cleaned_answer = (str(answer_notes).strip() or None) if answer_notes else None
+    # Default to 'authored' only when *nothing* was passed. An unrecognised value
+    # must not fall back to 'authored': that is the unsafe direction, turning a
+    # label nobody vouched for into a marking key.
+    supplied = str(answer_source or "").strip().lower()
+    if not supplied:
+        cleaned_source = "authored" if cleaned_answer else None
+    else:
+        cleaned_source = _clean_answer_source(answer_source)
+
     with session_scope() as session:
         row = Question(
             module_id=str(module_id).strip().upper(),
             prompt=text,
-            answer_notes=(str(answer_notes).strip() or None) if answer_notes else None,
-            answer_source=_clean_answer_source(answer_source),
+            answer_notes=cleaned_answer,
+            answer_source=cleaned_source,
             difficulty=_clean_difficulty(difficulty),
             origin=_clean_origin(origin),
             source_label=(str(source_label).strip() or None) if source_label else None,
@@ -107,15 +124,76 @@ def add_question(
 
 
 def list_questions(
-    module_id: str, *, include_inactive: bool = False, limit: int = 500
+    module_id: str,
+    *,
+    include_inactive: bool = False,
+    limit: int = 500,
+    include_answers: bool = False,
 ) -> list[dict]:
-    """The bank for a module, newest first. Answers are stripped."""
+    """The bank for a module, newest first.
+
+    Answers are withheld unless ``include_answers`` is set. The student-facing
+    route must never pass it; the staff console does, because approving an answer
+    is impossible without reading it.
+    """
     with session_scope() as session:
         stmt = select(Question).where(Question.module_id == str(module_id).strip().upper())
         if not include_inactive:
             stmt = stmt.where(Question.is_active.is_(True))
         rows = session.execute(stmt.order_by(Question.created_at.desc()).limit(limit)).scalars()
-        return [_to_dict(r, include_answer=False) for r in rows]
+        return [_to_dict(r, include_answer=include_answers) for r in rows]
+
+
+def get_question(question_id: int) -> Optional[dict]:
+    """One question including its answer, or ``None``.
+
+    Used by the edit route, which has to read ``module_id`` to check the caller's
+    scope before it is allowed to change anything.
+    """
+    with session_scope() as session:
+        row = session.get(Question, int(question_id))
+        return _to_dict(row, include_answer=True) if row is not None else None
+
+
+def update_question(question_id: int, **fields) -> Optional[dict]:
+    """Update selected fields on a banked question.
+
+    Only the columns passed are written. ``answer_source`` is normalised the same
+    way as on insert, so an unrecognised value becomes "not gradeable" rather
+    than silently "authored" - approving a draft has to be a deliberate act.
+    """
+    allowed = {"prompt", "answer_notes", "difficulty", "answer_source", "is_active"}
+    unknown = set(fields) - allowed
+    if unknown:
+        raise PracticeError(f"Cannot update: {', '.join(sorted(unknown))}.")
+
+    with session_scope() as session:
+        row = session.get(Question, int(question_id))
+        if row is None:
+            return None
+
+        if "prompt" in fields:
+            text = str(fields["prompt"] or "").strip()
+            if len(text) < 8:
+                raise PracticeError("A question needs at least a few words of prompt.")
+            row.prompt = text
+        if "answer_notes" in fields:
+            value = fields["answer_notes"]
+            row.answer_notes = (str(value).strip() or None) if value else None
+        if "difficulty" in fields:
+            row.difficulty = _clean_difficulty(fields["difficulty"])
+        if "answer_source" in fields:
+            source = _clean_answer_source(fields["answer_source"])
+            # Clearing the answer makes the source meaningless; keeping it would
+            # imply a key exists for a question that has none.
+            if not (row.answer_notes or "").strip():
+                source = None
+            row.answer_source = source
+        if "is_active" in fields:
+            row.is_active = bool(fields["is_active"])
+
+        session.flush()
+        return _to_dict(row, include_answer=True)
 
 
 def delete_question(question_id: int) -> bool:

@@ -30,6 +30,8 @@ from ..practice import (
     draw_test,
     first_party_material,
     generate_questions_from_text,
+    get_question,
+    update_question,
     list_questions,
     mark_attempt,
 )
@@ -113,7 +115,13 @@ def post_submit():
 
 @practice_bp.get("/bank")
 def get_bank():
-    """The question bank for a module. Staff only; answers are stripped."""
+    """The question bank for a module, staff only.
+
+    Answers **are** included here, unlike on ``GET /api/practice/questions`` which
+    serves students. The route is already gated by ``_require_staff`` for the
+    caller's modules, and a lecturer cannot responsibly approve an answer they
+    are not allowed to read - approving is what turns a draft into a marking key.
+    """
     identity = require_student(request)
     module_id = (request.args.get("module_id") or "").strip().upper()
     if not module_id:
@@ -123,14 +131,20 @@ def get_bank():
         {
             "module_id": module_id,
             "size": bank_size(module_id),
-            "questions": list_questions(module_id),
+            "questions": list_questions(module_id, include_answers=True),
         }
     ), 200
 
 
 @practice_bp.post("/bank")
 def post_bank():
-    """Add one question. Staff only, and only for a module they teach."""
+    """Add one question. Staff only, and only for a module they teach.
+
+    A hand-written question defaults to ``answer_source='authored'``, which is
+    the only kind :func:`src.practice.mark_attempt` will score against. Passing
+    ``answer_source`` explicitly is how an AI draft is created knowingly as a
+    reference rather than a key.
+    """
     identity = require_student(request)
     payload = request.get_json(silent=True) or {}
     module_id = (payload.get("module_id") or "").strip().upper()
@@ -142,6 +156,7 @@ def post_bank():
             module_id=module_id,
             prompt=payload.get("prompt"),
             answer_notes=payload.get("answer_notes"),
+            answer_source=payload.get("answer_source"),
             difficulty=payload.get("difficulty"),
             origin=payload.get("origin") or "authored",
             source_label=payload.get("source_label"),
@@ -150,6 +165,50 @@ def post_bank():
     except PracticeError as exc:
         return jsonify({"error": exc.message}), exc.status_code
     return jsonify({"question": row}), 201
+
+
+@practice_bp.patch("/bank/<int:question_id>")
+def patch_bank(question_id: int):
+    """Edit a question, or approve a drafted answer. Staff only.
+
+    This is the route that makes the marking model usable rather than merely
+    safe. Every answer in a seeded bank is ``generated``, and a generated answer
+    is never auto-marked - correctly, because the bank has no human behind it. The
+    only way a seeded question ever starts being scored is a lecturer reading it,
+    correcting it, and saying so.
+
+    ``answer_source='authored'`` is that decision. It is deliberately not implied
+    by editing ``answer_notes``: someone tidying a typo in a draft should not
+    silently promote it to a marking key.
+    """
+    identity = require_student(request)
+    if identity.role not in BANK_ROLES:
+        raise AuthError("Tutor, lecturer or admin role required.", status_code=403)
+
+    payload = request.get_json(silent=True) or {}
+    row = get_question(question_id)
+    if row is None:
+        return jsonify({"error": "Question not found."}), 404
+    _require_staff(identity, row["module_id"])
+
+    # Only fields actually present are touched, so a partial update cannot blank
+    # a question by omitting a key.
+    fields = {key: payload[key] for key in ("prompt", "answer_notes", "difficulty") if key in payload}
+    if "answer_source" in payload:
+        fields["answer_source"] = payload.get("answer_source")
+    if "is_active" in payload:
+        fields["is_active"] = bool(payload.get("is_active"))
+
+    if not fields:
+        return jsonify({"error": "Nothing to update."}), 400
+
+    try:
+        updated = update_question(question_id, **fields)
+    except PracticeError as exc:
+        return jsonify({"error": exc.message}), exc.status_code
+    if updated is None:
+        return jsonify({"error": "Question not found."}), 404
+    return jsonify({"question": updated}), 200
 
 
 @practice_bp.delete("/bank/<int:question_id>")
