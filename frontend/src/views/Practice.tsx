@@ -1,4 +1,4 @@
-import { BookOpen, CheckCircle2, Circle, Loader2, Send, Sparkles } from 'lucide-react'
+import { BookOpen, CheckCircle2, Circle, Info, Loader2, Send, Sparkles } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { useSession } from '../state/session'
@@ -14,6 +14,8 @@ interface MarkedQuestion {
   question_id: number
   correct: boolean
   markable: boolean
+  /** How this question was handled: auto-marked, reference-only, or no answer. */
+  mode: 'auto' | 'reference' | 'none'
   answer_notes: string | null
 }
 
@@ -40,6 +42,10 @@ export default function Practice() {
     score: number
     max_score: number
     unmarked: number
+    /** Questions carrying an AI-written reference answer, shown but never marked. */
+    reference_only: number
+    /** Questions with no answer at all. */
+    no_answer: number
     breakdown: MarkedQuestion[]
   } | null>(null)
   const [loading, setLoading] = useState(false)
@@ -202,26 +208,37 @@ export default function Practice() {
 
                   {marked && (
                     <div
-                      className={`mt-2 flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
-                        marked.correct
-                          ? 'bg-emerald-50 text-emerald-800'
-                          : marked.markable
-                            ? 'bg-rose-50 text-rose-800'
-                            : 'bg-slate-50 text-slate-600'
+                      className={`mt-2 rounded-lg px-3 py-2 text-xs ${
+                        marked.mode === 'auto'
+                          ? marked.correct
+                            ? 'bg-emerald-50 text-emerald-800'
+                            : 'bg-rose-50 text-rose-800'
+                          : 'bg-amber-50 text-amber-900'
                       }`}
                     >
-                      {marked.correct ? (
-                        <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" />
-                      ) : (
-                        <Circle className="mt-px h-3.5 w-3.5 shrink-0" />
+                      <div className="flex items-start gap-2">
+                        {marked.mode === 'auto' && marked.correct ? (
+                          <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" />
+                        ) : marked.mode === 'auto' ? (
+                          <Circle className="mt-px h-3.5 w-3.5 shrink-0" />
+                        ) : (
+                          <Info className="mt-px h-3.5 w-3.5 shrink-0" />
+                        )}
+                        <span className="font-medium">
+                          {marked.mode === 'auto'
+                            ? marked.correct
+                              ? 'Correct.'
+                              : 'Marked wrong.'
+                            : marked.mode === 'reference'
+                              ? 'Reference answer - not marked. This one was written by AI, so judge your own answer against it.'
+                              : 'No reference answer. Your lecturer has not written one for this question.'}
+                        </span>
+                      </div>
+                      {marked.answer_notes && (
+                        <p className="mt-1.5 whitespace-pre-wrap border-l-2 border-current/25 pl-2 opacity-90">
+                          {marked.answer_notes}
+                        </p>
                       )}
-                      <span>
-                        {!marked.markable
-                          ? 'Not marked - your lecturer has not recorded an answer for this one.'
-                          : marked.correct
-                            ? 'Correct.'
-                            : `Expected: ${marked.answer_notes}`}
-                      </span>
                     </div>
                   )}
                 </li>
@@ -248,11 +265,26 @@ export default function Practice() {
             ) : (
               <>
                 <span className="text-sm font-medium text-slate-800">
-                  Score: {result.score} / {result.max_score}
+                  {result.max_score > 0 ? (
+                    `Score: ${result.score} / ${result.max_score}`
+                  ) : (
+                    'Not scored'
+                  )}
                 </span>
-                {result.unmarked > 0 && (
+                {result.reference_only > 0 && (
+                  <span className="text-xs text-amber-700">
+                    {result.reference_only} AI reference
+                    {result.reference_only === 1 ? '' : 's'} - compare your own answers
+                  </span>
+                )}
+                {result.no_answer > 0 && (
                   <span className="text-xs text-slate-400">
-                    ({result.unmarked} not marked by your lecturer)
+                    {result.no_answer} with no reference answer
+                  </span>
+                )}
+                {result.max_score === 0 && result.unmarked > 0 && (
+                  <span className="text-xs text-slate-400">
+                    (nothing could be marked yet)
                   </span>
                 )}
                 <button

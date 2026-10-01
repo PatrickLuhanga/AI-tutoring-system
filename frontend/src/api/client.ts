@@ -122,10 +122,15 @@ export const api = {
     score: number
     max_score: number
     unmarked: number
+    /** Questions carrying an AI-written reference answer: shown, never marked. */
+    reference_only: number
+    /** Questions with no answer at all. */
+    no_answer: number
     breakdown: Array<{
       question_id: number
       correct: boolean
       markable: boolean
+      mode: 'auto' | 'reference' | 'none'
       answer_notes: string | null
     }>
   }> {
