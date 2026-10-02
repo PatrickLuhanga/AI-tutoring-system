@@ -18,7 +18,14 @@ from sqlalchemy import func, inspect, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .db import engine, ensure_database_exists
-from .models import INTENT_VALUES, SCAFFOLDING_STAGES, Base, LLMConfig, Module
+from .models import (
+    ANSWER_SOURCES,
+    INTENT_VALUES,
+    SCAFFOLDING_STAGES,
+    Base,
+    LLMConfig,
+    Module,
+)
 from .config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(message)s")
@@ -66,6 +73,48 @@ def sync_enum_constraints() -> None:
         logger.info("Telemetry CHECK constraints synced (intent, scaffolding_stage)")
     except Exception as exc:  # noqa: BLE001 - setup should not fail on a missing table
         logger.warning("Could not sync telemetry CHECK constraints: %s", exc)
+
+
+def add_missing_columns() -> None:
+    """Add columns that ``create_all`` cannot, because it never alters a table.
+
+    Every statement is ``IF NOT EXISTS``, so this is safe to run on every setup.
+    A database created before a column existed simply gains it, with no data
+    rewritten and no rows dropped.
+    """
+    statements = [
+        # Questions can carry a reference answer now, and answer_source records
+        # whether a human wrote it. NULL means "no answer", which excludes the
+        # question from a score rather than marking it wrong.
+        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS answer_source VARCHAR(16)",
+        # Records the outcome of processing an upload, so the Content console can
+        # say what happened instead of leaving every row at "pending".
+        "ALTER TABLE uploaded_documents ADD COLUMN IF NOT EXISTS ingest_detail TEXT",
+    ]
+    try:
+        with engine.begin() as conn:
+            for sql in statements:
+                conn.execute(text(sql))
+        logger.info("Added missing columns (%d)", len(statements))
+    except Exception as exc:  # noqa: BLE001 - setup should not fail on a missing table
+        logger.warning("Could not add missing columns: %s", exc)
+
+    # The CHECK constraint has to be (re)created separately: adding the column
+    # does not add the constraint, and create_all will not revisit an existing
+    # table to notice.
+    try:
+        source_values = ", ".join(f"'{value}'" for value in ANSWER_SOURCES)
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE questions DROP CONSTRAINT IF EXISTS ck_questions_answer_source"))
+            conn.execute(
+                text(
+                    "ALTER TABLE questions ADD CONSTRAINT ck_questions_answer_source "
+                    f"CHECK (answer_source IS NULL OR answer_source IN ({source_values}))"
+                )
+            )
+        logger.info("Question answer_source constraint synced")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not sync the answer_source constraint: %s", exc)
 
 
 def create_vector_indexes() -> None:
@@ -125,40 +174,11 @@ def create_vector_indexes() -> None:
                 logger.info("Vector index ready: %s (ivfflat fallback)", name)
 
 
-def ensure_hybrid_search_columns() -> None:
-    """Add the generated ``content_tsv`` columns to pre-existing tables.
-
-    ``create_all`` never alters an existing table, so a database created before
-    the hybrid-search port lacks the generated tsvector columns. Adding them
-    here rewrites the table and backfills the full-text index for every row.
-    On a fresh install ``create_all`` already created them and these statements
-    are no-ops.
-    """
-    statements = [
-        "ALTER TABLE curriculum_chunks "
-        "ADD COLUMN IF NOT EXISTS content_tsv tsvector "
-        "GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, chunk_text)) STORED",
-        "ALTER TABLE code_repair_patterns "
-        "ADD COLUMN IF NOT EXISTS content_tsv tsvector "
-        "GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, "
-        "(error_title || ' ' || broken_code || ' ' || conceptual_tutor_hint))) STORED",
-    ]
-    try:
-        with engine.begin() as conn:
-            for sql in statements:
-                conn.execute(text(sql))
-        logger.info("Hybrid-search tsvector columns ensured (curriculum_chunks, code_repair_patterns)")
-    except Exception as exc:  # noqa: BLE001 - schema upgrade should not block startup
-        logger.warning("Could not ensure hybrid-search tsvector columns: %s", exc)
-
-
 def create_secondary_indexes() -> None:
     statements = [
         "CREATE INDEX IF NOT EXISTS idx_curriculum_chunks_metadata ON curriculum_chunks USING gin (doc_metadata jsonb_path_ops)",
         "CREATE INDEX IF NOT EXISTS idx_code_patterns_tags ON code_repair_patterns USING gin (tags)",
         "CREATE INDEX IF NOT EXISTS idx_curriculum_chunks_text_trgm ON curriculum_chunks USING gin (chunk_text gin_trgm_ops)",
-        "CREATE INDEX IF NOT EXISTS idx_curriculum_chunks_tsv ON curriculum_chunks USING gin (content_tsv)",
-        "CREATE INDEX IF NOT EXISTS idx_code_patterns_tsv ON code_repair_patterns USING gin (content_tsv)",
     ]
     with engine.begin() as conn:
         for sql in statements:
@@ -257,8 +277,8 @@ def main(argv: list[str] | None = None) -> int:
     ensure_database_exists()
     create_extension()
     create_tables(drop=args.drop)
+    add_missing_columns()
     sync_enum_constraints()
-    ensure_hybrid_search_columns()
     create_vector_indexes()
     create_secondary_indexes()
     if not args.skip_modules:

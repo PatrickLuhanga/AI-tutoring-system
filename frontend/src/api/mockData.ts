@@ -7,7 +7,6 @@
  */
 
 import type {
-  ChatMessage,
   ChatResponse,
   LLMConfig,
   Module,
@@ -46,124 +45,6 @@ export const MODULES: Module[] = [
     module_name: 'Social and Professional Issues',
     course_code: 'DIP3',
     language: 'N/A',
-  },
-]
-
-// ---------------------------------------------------------------------------
-// Mock transcript — a student debugging an IndexOutOfRange-style error.
-// ---------------------------------------------------------------------------
-
-const C_SHARP_HINT = `Let's slow down and look at **how you are indexing**, not at the fix itself.
-
-When you write \`numbers[i]\`, C# requires \`i\` to satisfy \`0 <= i < numbers.Length\`. The
-exception tells you that assumption broke somewhere, so the real question is: *which value of
-\`i\` walked past the end of the array?*
-
-Here is the smallest version of your loop so we can reason about it together:
-
-\`\`\`csharp
-int[] numbers = { 4, 8, 15, 16 };
-
-// Where does this loop read past the last valid index?
-for (int i = 0; i <= numbers.Length; i++)
-{
-    Console.WriteLine(numbers[i]);
-}
-\`\`\`
-
-### Questions to work through
-1. What is \`numbers.Length\` for this array?
-2. What is the **last** valid index — and how is it related to \`Length\`?
-3. Which iteration of the loop first breaks that rule?
-
-Change *one* boundary condition in your own code, run it again, and paste the output (or the
-new exception). I'll stay on the loop boundary with you until it compiles and prints every
-element exactly once.`
-
-const C_SHARP_FOLLOWUP = `Good — you spotted that \`i <= numbers.Length\` lets \`i\` reach \`Length\`, which is one
-past the last element. That is the classic off-by-one.
-
-Before you commit the fix, predict the output for this array so you can prove the boundary is
-right in your head:
-
-\`\`\`csharp
-int[] numbers = { 2, 4, 6 };
-\`\`\`
-
-How many lines do you expect to print, and what are they? If that matches what your loop
-prints, the bug is genuinely gone — not just hidden.`
-
-export const INITIAL_MESSAGES: ChatMessage[] = [
-  {
-    message_id: 'seed-msg-0001',
-    role: 'user',
-    content:
-      "I keep getting `System.IndexOutOfRangeException: Index was outside the bounds of the array` when I loop through my array in C#. I've been staring at it for an hour. Can you just show me the correct code?",
-    created_at: '2026-09-24T09:12:00Z',
-  },
-  {
-    message_id: 'seed-msg-0002',
-    role: 'assistant',
-    content: C_SHARP_HINT,
-    created_at: '2026-09-24T09:12:04Z',
-    audit: {
-      intent: { label: 'debugging', confidence: 0.91, source: 'heuristic' },
-      scaffolding: { stage: 'guiding', hint_depth: 1, strategy: 'questioning' },
-      guardrail: { flagged: false, flags: [], action: 'pass' },
-      retrieval: {
-        query: 'IndexOutOfRangeException loop array C# boundary',
-        module_id: 'PBDV301',
-        chunks: [
-          {
-            chunk_id: 412,
-            module_id: 'PBDV301',
-            source_name: 'Arrays & Collections',
-            section_title: 'Bounds checking and off-by-one loops',
-            distance: 0.1873,
-            preview:
-              'An array of length n exposes valid indices 0 through n-1. Iterating with i <= n reads one element past the end...',
-          },
-        ],
-        patterns: [
-          {
-            pattern_id: 88,
-            module_id: null,
-            error_title: 'Loop boundary reads one past the final element',
-            exception_thrown: 'System.IndexOutOfRangeException',
-            distance: 0.1542,
-            hint: 'Ask the student which iteration first violates 0 <= i < Length rather than correcting the operator.',
-          },
-        ],
-      },
-      llm: { provider: 'local', model: 'qwen3:4b', backend: 'ollama', latency_ms: 1840 },
-      telemetry_log_id: 90211,
-    },
-  },
-  {
-    message_id: 'seed-msg-0003',
-    role: 'user',
-    content: 'Oh. `i <= numbers.Length` should be `i < numbers.Length`, right?',
-    created_at: '2026-09-24T09:14:31Z',
-  },
-  {
-    message_id: 'seed-msg-0004',
-    role: 'assistant',
-    content: C_SHARP_FOLLOWUP,
-    created_at: '2026-09-24T09:14:35Z',
-    feedback: { rating: 1, submitted: true },
-    audit: {
-      intent: { label: 'debugging', confidence: 0.95, source: 'heuristic' },
-      scaffolding: { stage: 'reinforcing', hint_depth: 2, strategy: 'questioning' },
-      guardrail: { flagged: false, flags: [], action: 'pass' },
-      retrieval: {
-        query: 'off by one loop boundary verify prediction C#',
-        module_id: 'PBDV301',
-        chunks: [],
-        patterns: [],
-      },
-      llm: { provider: 'local', model: 'qwen3:4b', backend: 'ollama', latency_ms: 1210 },
-      telemetry_log_id: 90218,
-    },
   },
 ]
 
@@ -243,9 +124,28 @@ is right before the failure?`
           distance: 0.221,
           preview:
             'Start from the innermost frame and work outward: the exception type names the category of failure, the message names the value, the frame names the line...',
+          cite_key: 'C1',
+          source_file: 'PBDV/notes/Debugging_Fundamentals.md',
+          source_category: 'notes',
+          is_answer: false,
+          url: '/resources/PBDV301/notes/Debugging_Fundamentals.md',
+          anchor: 'reading-a-stack-trace-as-evidence',
         },
       ],
       patterns: [],
+      citations: [
+        {
+          cite_key: 'C1',
+          module_id: moduleId,
+          source_file: 'PBDV/notes/Debugging_Fundamentals.md',
+          section_title: 'Reading a stack trace as evidence',
+          url: '/resources/PBDV301/notes/Debugging_Fundamentals.md',
+          anchor: 'reading-a-stack-trace-as-evidence',
+          distance: 0.221,
+          source_category: 'notes',
+          is_answer: false,
+        },
+      ],
     },
     llm: {
       provider: 'local',

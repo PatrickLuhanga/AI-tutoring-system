@@ -14,11 +14,13 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ..agents import ChatRequest, TutoringWorkflow
-from ..auth import check_module_access, resolve_identity
+from ..auth import check_module_access, require_student
 from ..db import session_scope
+from ..history import append_message
 from ..inference import INFERENCE_UNAVAILABLE_MESSAGE
 from ..llm_router import LLMError
 from ..models import FEEDBACK_REASON_TAGS, HintFeedback, Module
+from ..sessions import record_session_turn
 
 logger = logging.getLogger(__name__)
 
@@ -55,19 +57,45 @@ def chat():
     if not module_id:
         return jsonify({"error": "`module_id` is required."}), 400
 
-    identity = resolve_identity(request)
+    identity = require_student(request)
     access = check_module_access(identity, module_id)
     if not access.allowed:
         status = 404 if not access.exists else 403
         return jsonify({"error": access.reason, "module_id": module_id}), status
 
     session_id = str(payload.get("session_id") or uuid.uuid4().hex)
+    user_message_id = uuid.uuid4().hex
+
+    # Persist the student's turn into the student-facing history store
+    # (``tutoring_sessions`` / ``session_messages``). Best-effort: a Data Tier
+    # hiccup must never cost the student an answer, and the workflow keeps its
+    # own ``chat_turns`` record for the tutor review queue regardless.
+    try:
+        record_session_turn(
+            session_id=session_id,
+            student_id=identity.student_id,
+            email=identity.email,
+            module_id=module_id,
+        )
+        append_message(
+            session_id=session_id,
+            role="user",
+            content=message,
+            module_id=module_id,
+            student_id=identity.student_id,
+            email=identity.email,
+            message_id=user_message_id,
+        )
+    except Exception as exc:  # noqa: BLE001 - history must not break the reply
+        logger.exception("Could not persist the student turn for session %s: %s", session_id, exc)
+
     request_obj = ChatRequest(
         message=message,
         module_id=module_id,
         session_id=session_id,
         student_id=identity.student_id,
         student_email=identity.email,
+        user_id=identity.user_id,
         history=_clean_history(payload.get("history")),
     )
 
@@ -82,6 +110,31 @@ def chat():
     body = result.to_dict()
     body["identity"] = identity.to_dict()
     body["module_access"] = access.to_dict()
+    body["user_message_id"] = user_message_id
+
+    # Persist the tutor's reply together with its audit trail so the sidebar can
+    # restore the full conversation and re-open the audit panel for a past turn.
+    try:
+        append_message(
+            session_id=session_id,
+            role="assistant",
+            content=result.reply,
+            module_id=module_id,
+            student_id=identity.student_id,
+            email=identity.email,
+            message_id=result.message_id,
+            audit={
+                "intent": result.intent,
+                "scaffolding": result.scaffolding,
+                "guardrail": result.guardrail,
+                "retrieval": result.retrieval,
+                "llm": result.llm,
+                "telemetry_log_id": result.telemetry_log_id,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 - never break the served reply
+        logger.exception("Could not persist the tutor turn for session %s: %s", session_id, exc)
+
     return jsonify(body), 200
 
 
@@ -101,7 +154,7 @@ def feedback():
     if reason_tag is not None and reason_tag not in FEEDBACK_REASON_TAGS:
         return jsonify({"error": f"`reason_tag` must be one of {list(FEEDBACK_REASON_TAGS)}."}), 400
 
-    identity = resolve_identity(request)
+    identity = require_student(request)
     module_id = payload.get("module_id")
     values = {
         "session_id": session_id,

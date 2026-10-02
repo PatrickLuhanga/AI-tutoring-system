@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
@@ -36,7 +38,42 @@ from .secrets_store import SecretStoreError, encrypt_secret, try_decrypt_secret
 logger = logging.getLogger(__name__)
 
 #: Re-exported for the many modules that historically imported it from here.
-__all__ = ["LLMError", "LLMResponse", "LLMConfigService", "LLMRouter", "get_router"]
+__all__ = [
+    "LLMError",
+    "LLMResponse",
+    "LLMConfigService",
+    "LLMRouter",
+    "get_router",
+    "strip_reasoning",
+]
+
+
+#: Reasoning models (qwen3, deepseek-r1, ...) can inline their chain of thought
+#: into the reply body. A student must never see the tutor's internal monologue -
+#: it is confusing, it leaks the hidden Scaffolding instructions, and it burns the
+#: response budget. Anything up to a closing ``</think>`` is discarded.
+_THINK_BLOCK_RE = re.compile(
+    r"<(think|thinking|reasoning|scratchpad)\b[^>]*>.*?"
+    r"(?:</\1\s*>|(?=\Z))",
+    re.IGNORECASE | re.DOTALL,
+)
+#: A stray closing tag with no opener (some runtimes split the channels oddly).
+_ORPHAN_CLOSE_RE = re.compile(r"</(?:think|thinking|reasoning|scratchpad)\s*>", re.IGNORECASE)
+
+
+def strip_reasoning(text: Optional[str]) -> str:
+    """Remove any leaked chain-of-thought from a model reply.
+
+    Best-effort and deliberately aggressive: a reply that loses a stray tag is far
+    better than one that shows the student its own prompt scaffolding.
+    """
+    if not text:
+        return ""
+    cleaned = _THINK_BLOCK_RE.sub("", text)
+    if _ORPHAN_CLOSE_RE.search(cleaned):
+        # A closing tag with no opener: everything before it was reasoning.
+        cleaned = _ORPHAN_CLOSE_RE.split(cleaned, maxsplit=1)[-1]
+    return cleaned.strip()
 
 
 @dataclass(slots=True)
@@ -405,19 +442,66 @@ class LLMRouter:
                 "temperature": temperature,
                 "top_p": config.top_p,
                 "num_predict": max_tokens,
+                # Reasoning models (qwen3, deepseek-r1, ...) emit a `thinking`
+                # channel that would otherwise be inlined into `content` and shown
+                # to the student. This flag must sit INSIDE `options` on Ollama
+                # 0.34.x - as a sibling of `options` it is silently ignored and the
+                # reasoning leaks into the reply. Ignored by models with no
+                # thinking channel.
+                "think": settings.ollama_think,
             },
         }
         if json_mode:
             body["format"] = "json"
 
         data = client.post_json("/api/chat", body)
+        text = strip_reasoning((data.get("message") or {}).get("content"))
 
-        text = (data.get("message") or {}).get("content")
         if not text:
-            raise LLMError(f"Ollama returned an empty response from {url}.")
+            # A reasoning model can spend the entire num_predict budget on its
+            # thinking channel and return nothing. That is not a transport failure
+            # and retrying with the same budget just fails again, so escalate the
+            # budget once and try again.
+            retry_budget = max(max_tokens, int(settings.llm_max_tokens)) * 2
+            logger.warning(
+                "Ollama returned an empty response for %s (model=%s, num_predict=%d); "
+                "retrying with num_predict=%d to leave room after the thinking channel.",
+                url, config.local_model, max_tokens, retry_budget,
+            )
+            retry_body = dict(body)
+            retry_body["options"] = {**body["options"], "num_predict": retry_budget}
+            data = client.post_json("/api/chat", retry_body)
+            text = strip_reasoning((data.get("message") or {}).get("content"))
+
+        if not text:
+            # Still nothing: the model is thinking longer than any sane budget.
+            # Say so plainly rather than surfacing an empty hint to a student.
+            raise LLMError(
+                f"Ollama returned an empty response from {url} "
+                f"(model={config.local_model}). {config.local_model} is a reasoning "
+                f"model and used the whole token budget thinking. Either raise "
+                f"LLM_MAX_TOKENS further, or switch to a non-reasoning model via "
+                f"POST /api/admin/llm-config."
+            )
         return text, "ollama"
 
     # -- Cloud --------------------------------------------------------------
+    @staticmethod
+    def _env_cloud_api_key(config: LLMConfig) -> Optional[str]:
+        """Fall back to the process environment when no key is stored in the DB.
+
+        Groq is the default cloud provider, so a deployment can supply
+        ``GROQ_API_KEY`` in the environment (or ``.env``) and serve tutor turns
+        without an admin first pasting the key into the dashboard. A key rotated
+        through the admin API is still preferred, because the stored value is
+        read first.
+        """
+        if config.cloud_provider == "groq":
+            return settings.groq_api_key or None
+        if config.cloud_provider in {"openai", "openai_compatible", "azure_openai"}:
+            return os.getenv("OPENAI_API_KEY") or None
+        return None
+
     def _generate_cloud(
         self,
         config: LLMConfig,
@@ -425,16 +509,25 @@ class LLMRouter:
         temperature: float,
         max_tokens: int,
     ) -> tuple[str, str]:
-        api_key = self.config_service.get_api_key(config)
+        api_key = self.config_service.get_api_key(config) or self._env_cloud_api_key(config)
         if not api_key:
             raise LLMError(
-                "The active cloud provider has no API key configured. "
-                "Set one through POST /api/admin/llm-config."
+                "The active cloud provider has no API key configured. Set "
+                "GROQ_API_KEY in the environment, or set one through "
+                "POST /api/admin/llm-config."
             )
 
         if config.cloud_provider == "anthropic":
-            return self._generate_anthropic(config, messages, api_key, temperature, max_tokens)
-        return self._generate_openai(config, messages, api_key, temperature, max_tokens)
+            text, backend = self._generate_anthropic(
+                config, messages, api_key, temperature, max_tokens
+            )
+        else:
+            text, backend = self._generate_openai(
+                config, messages, api_key, temperature, max_tokens
+            )
+        # A reasoning model served through an OpenAI-compatible endpoint (e.g.
+        # deepseek-r1) can inline its chain of thought the same way Ollama does.
+        return strip_reasoning(text), backend
 
     def _generate_openai(
         self,

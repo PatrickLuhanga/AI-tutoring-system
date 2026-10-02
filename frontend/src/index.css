@@ -1,9 +1,192 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* ===========================================================================
+   Theme
+   ---------------------------------------------------------------------------
+   Colours are declared once here as custom properties, then overridden per
+   theme. Tailwind v4 compiles every colour utility to `var(--color-*)`, so
+   redefining these in a `[data-theme]` block re-themes the whole application
+   without touching a single component. That is why there is no `dark:`
+   variant prefix anywhere in the codebase: a second, parallel set of class
+   names to keep in sync is how theme drift happens.
+
+   The palette comes from the two reference designs - both are built on the same
+   periwinkle accent, one near-black, one on a pale periwinkle wash.
+
+   Light   canvas #eef1fd  surface #ffffff  accent #5b64e8
+   Dark    canvas #08080a  surface #17171b  accent #a5aaf2
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   Semantic tokens. Preferred in new code: they read as intent, not as a
+   shade, so a palette change does not ripple through the components.
+   --------------------------------------------------------------------------- */
 @theme {
+  /* Surfaces */
+  --color-canvas: #eef1fd; /* the page behind everything */
+  --color-surface: #ffffff; /* cards, panels, inputs */
+  --color-surface-raised: #f7f8fe; /* nested panels, table headers */
+  --color-surface-sunken: #e6eafb; /* wells, empty states */
+  --color-line: #dfe3f5; /* hairlines and card borders */
+  --color-line-strong: #c8cee8;
+
+  /* Ink */
+  --color-ink: #14141a; /* primary text */
+  --color-ink-muted: #5b6070; /* secondary, labels */
+  --color-ink-subtle: #666d86; /* placeholders, timestamps */
+  --color-ink-inverse: #ffffff; /* text on a dark fill */
+  --color-on-accent: #ffffff; /* text on the accent fill */
+
+  /* Accent - the periwinkle from the references */
+  --color-accent: #5b64e8;
+  --color-accent-hover: #4a52d4;
+  --color-accent-soft: #e8eafd;
+  --color-accent-soft-hover: #d6dafb;
+  --color-accent-text: #3b3fa8; /* accent-coloured text on a light fill */
+  --color-accent-ring: rgb(91 100 232 / 0.35);
+
+  /* Status */
+  --color-success: #0f9d58;
+  --color-success-soft: #e3f5ea;
+  --color-success-text: #0b6b3d;
+  --color-danger: #d63a52;
+  --color-danger-soft: #fdecee;
+  --color-danger-text: #a32438;
+  --color-warning: #b67400;
+  --color-warning-soft: #fdf1dc;
+  --color-warning-text: #8a5900;
+
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Fira Code", monospace;
+}
+
+/* ---------------------------------------------------------------------------
+   Neutral ramp.
+   The application was written against Tailwind's slate scale, so rather than
+   rewrite ~340 `slate-*` usages the ramp itself is themed. In dark mode the
+   scale inverts: `slate-100` (the page) becomes near-black and `slate-900`
+   (body text) becomes near-white, which is what every one of those usages
+   already means.
+   --------------------------------------------------------------------------- */
+:root {
+  /* Light */
+  --color-white: #ffffff;
+  --color-slate-50: #f5f7fe;
+  --color-slate-100: #eef1fd;
+  --color-slate-200: #dfe3f5;
+  --color-slate-300: #c8cee8;
+  /* slate-400 carries 11px metadata - document counts, module names, the role
+     line in the header - on both white cards and the tinted canvas. Darkened
+     from a plausible-looking #a3aac6, which measured 3.16:1 on white. */
+  --color-slate-400: #666d86;
+  --color-slate-500: #545a70;
+  --color-slate-600: #545a70;
+  --color-slate-700: #3d4254;
+  --color-slate-800: #262a37;
+  --color-slate-900: #14141a;
+
+  /* Status ramps - light */
+  --color-blue-50: #e8eafd;
+  --color-blue-100: #d6dafb;
+  --color-blue-400: #8189f4;
+  --color-blue-500: #6f78f0;
+  --color-blue-600: #5b64e8;
+  --color-blue-700: #4a52d4;
+  --color-blue-800: #3b3fa8;
+  --color-indigo-600: #5b64e8;
+  --color-indigo-700: #4a52d4;
+  --color-emerald-50: #e3f5ea;
+  --color-emerald-600: #0f9d58;
+  --color-emerald-700: #0b6b3d;
+  --color-emerald-800: #08522e;
+  --color-rose-50: #fdecee;
+  --color-rose-600: #d63a52;
+  --color-rose-700: #a32438;
+  --color-rose-800: #7d1a2a;
+  --color-amber-50: #fdf1dc;
+  --color-amber-100: #f9e3b8;
+  --color-amber-600: #b67400;
+  --color-amber-700: #8a5900;
+  --color-amber-800: #6b4400;
+
+  --shadow-card: 0 1px 2px rgb(20 20 26 / 0.05), 0 1px 3px rgb(20 20 26 / 0.04);
+  --shadow-raised: 0 8px 24px rgb(20 20 26 / 0.10);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-canvas: #08080a;
+  --color-surface: #17171b;
+  --color-surface-raised: #1f1f25;
+  --color-surface-sunken: #101013;
+  --color-line: #2a2a32;
+  --color-line-strong: #3a3a45;
+
+  --color-ink: #f4f4f7;
+  --color-ink-muted: #a4a8b8;
+  --color-ink-subtle: #7d8296;
+  --color-ink-inverse: #14141a;
+  --color-on-accent: #14141a;
+
+  --color-accent: #a5aaf2;
+  --color-accent-hover: #b9bdf7;
+  --color-accent-soft: #1c1f3d;
+  --color-accent-soft-hover: #242850;
+  --color-accent-text: #c3c7fb;
+  --color-accent-ring: rgb(165 170 242 / 0.4);
+
+  --color-success: #34d399;
+  --color-success-soft: #07281c;
+  --color-success-text: #6ee7b7;
+  --color-danger: #fb7185;
+  --color-danger-soft: #2c0f16;
+  --color-danger-text: #fda4af;
+  --color-warning: #fbbf24;
+  --color-warning-soft: #2a1e06;
+  --color-warning-text: #fcd34d;
+
+  /* Dark ramp - inverted, so slate-100 is the page and slate-900 the text. */
+  --color-white: #17171b;
+  --color-slate-50: #101013;
+  --color-slate-100: #08080a;
+  --color-slate-200: #2a2a32;
+  --color-slate-300: #3a3a45;
+  /* Same metadata role as in light mode, and measured the same way: 4.69:1 on
+     the card surface, 5.25:1 on the canvas. */
+  --color-slate-400: #7d8296;
+  --color-slate-500: #a8aeba;
+  --color-slate-600: #b6bac8;
+  --color-slate-700: #d2d5df;
+  --color-slate-800: #e9ebf1;
+  --color-slate-900: #f4f4f7;
+
+  --color-blue-50: #14173a;
+  --color-blue-100: #1c2049;
+  --color-blue-400: #8b93f8;
+  --color-blue-500: #979df6;
+  --color-blue-600: #a5aaf2;
+  --color-blue-700: #b9bdf7;
+  --color-blue-800: #c9ccf9;
+  --color-indigo-600: #a5aaf2;
+  --color-indigo-700: #b9bdf7;
+  --color-emerald-50: #07281c;
+  --color-emerald-600: #34d399;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+  --color-rose-50: #2c0f16;
+  --color-rose-600: #fb7185;
+  --color-rose-700: #fda4af;
+  --color-rose-800: #fecdd3;
+  --color-amber-50: #2a1e06;
+  --color-amber-100: #3a2a08;
+  --color-amber-600: #fbbf24;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-raised: 0 8px 28px rgb(0 0 0 / 0.55);
 }
 
 html,
@@ -13,7 +196,19 @@ body,
 }
 
 body {
-  @apply bg-slate-100 text-slate-900 antialiased;
+  @apply bg-canvas text-ink antialiased;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+/* A theme swap mid-interaction should not animate every control, only the
+   page surfaces that change wholesale. */
+@view-transition {
+  navigation: auto;
+}
+
+::selection {
+  background: var(--color-accent-soft-hover);
+  color: var(--color-accent-text);
 }
 
 /* Keep the prose blocks readable inside chat bubbles, and stop Tailwind's
@@ -35,7 +230,7 @@ body {
 /* Slim scrollbars for the chat transcript and dashboard panels. */
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgb(148 163 184) transparent;
+  scrollbar-color: var(--color-slate-400) transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -45,4 +240,12 @@ body {
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
   @apply rounded-full bg-slate-400/60;
+}
+
+/* Focus rings need to be visible against both themes; the default outline on
+   a dark surface is close to invisible on a periwinkle accent fill. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: inherit;
 }

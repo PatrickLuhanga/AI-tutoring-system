@@ -22,6 +22,7 @@ route converts into the clean JSON payload the UI expects.
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -32,15 +33,53 @@ from sqlalchemy import func, select
 from ..config import settings
 from ..db import session_scope
 from ..llm_router import LLMError, LLMResponse, LLMRouter, get_router
-from ..models import Module, TelemetryLog
-from ..retriever import RetrievalResult, Retriever, get_retriever
+from ..models import CurriculumChunk, Module, TelemetryLog
+from ..query_expansion import (
+    QueryExpander,
+    is_weak_result,
+    reciprocal_rank_fusion,
+)
+from ..retriever import (
+    RetrievalPolicy,
+    RetrievalResult,
+    RetrievedChunk,
+    Retriever,
+    get_retriever,
+)
 from ..prompts import ROUTE_DIRECT
+from ..unanswered import classify_reason, record_ungrounded
 from .guardrail import GuardrailAgent, GuardrailResult
 from .intent_agent import _CODE_SIGNAL_RE, Intent, IntentAgent
 from .scaffolding import ScaffoldingLayer
 from .tutor_agent import TutorAgent
 
 logger = logging.getLogger(__name__)
+
+#: Headings that identify a document's shape rather than its content. Offering
+#: these to the expander wastes its attention and its prompt budget.
+_UNINFORMATIVE_TITLE_RE = re.compile(
+    r"^(?:summary|overview|introduction|contents?|agenda|outline|topic|notes?"
+    r"|further reading|references?|bibliography|objectives?|learning outcomes?"
+    r"|questions?|exercises?|tutorials?|activity|discussion|problem|solution"
+    r"|conclusion|examples?|content|thank you|index|credits|acknowledgements?"
+    r"|preface|pages?|next|previous|home|back|yes|no|none)\b\.?$",
+    re.IGNORECASE,
+)
+
+#: Structural prefixes that carry no topical information. "slide 13: aims and
+#: objectives" and "aims and objectives" are the same heading, but only the second
+#: reads as a phrase the expander can turn into a query.
+_TITLE_PREFIX_RE = re.compile(
+    r"^(?:slide|page|topic|chapter|part|exercise|question|example|figure|table|step)"
+    r"\s*\d*\s*[:.\-]\s*",
+    re.IGNORECASE,
+)
+
+
+def _normalise_title(title: str) -> str:
+    """Strip structural prefixes so a heading reads as a phrase."""
+    cleaned = _TITLE_PREFIX_RE.sub("", (title or "").strip())
+    return cleaned.rstrip(" .:;").strip() or (title or "").strip()
 
 
 @dataclass(slots=True)
@@ -50,6 +89,9 @@ class ChatRequest:
     session_id: str
     student_id: Optional[int] = None
     student_email: Optional[str] = None
+    #: The login account, distinct from ``student_id``. Needed so a stored chat
+    #: turn is attributable to a user even where no directory row exists yet.
+    user_id: Optional[int] = None
     history: list[dict[str, str]] = field(default_factory=list)
 
 
@@ -90,6 +132,8 @@ class TutoringWorkflow:
         scaffolding: Optional[ScaffoldingLayer] = None,
         tutor: Optional[TutorAgent] = None,
         guardrail: Optional[GuardrailAgent] = None,
+        *,
+        persist: bool = True,
     ) -> None:
         self.router = router or get_router()
         self.retriever = retriever or get_retriever()
@@ -97,6 +141,13 @@ class TutoringWorkflow:
         self.scaffolding = scaffolding or ScaffoldingLayer()
         self.tutor = tutor or TutorAgent(self.router)
         self.guardrail = guardrail or GuardrailAgent()
+        self.expander = QueryExpander(self.router)
+        #: When ``False`` the workflow serves a turn but writes nothing: no
+        #: ``chat_turns``, no tutor-queue entry and no telemetry. The offline
+        #: evaluation harness runs the real retrieval and generation pipeline
+        #: against the live corpus with this off, so synthetic benchmark turns
+        #: never pollute the production tutor queue (defect C8).
+        self.persist = persist
 
     def handle(self, request: ChatRequest) -> WorkflowResult:
         started = time.perf_counter()
@@ -108,11 +159,13 @@ class TutoringWorkflow:
         intent = self.intent_agent.classify(request.message, module_name, request.history)
         # ``determine_stage`` returns the neutral ``direct_answer`` stage for the
         # factual track, so telemetry stays consistent without a Socratic stage.
-        stage, depth = self.scaffolding.determine_stage(prior_turns, intent, request.message)
+        stage, depth = self.scaffolding.determine_stage(
+            prior_turns, intent, request.message, request.history
+        )
         direct = intent.route == ROUTE_DIRECT
 
         # Data Tier: degrade to empty context if the vector store is unreachable.
-        retrieval = self._retrieve(request, intent)
+        retrieval = self._retrieve(request, intent, stage, direct)
 
         # Inference Tier: may raise LLMError -> handled as a clean 502 upstream.
         if direct:
@@ -143,16 +196,47 @@ class TutoringWorkflow:
         )
         latency_ms = int((time.perf_counter() - started) * 1000)
 
-        log_id = self._log_telemetry(
-            request=request,
-            message_id=message_id,
-            intent=intent,
-            stage=stage,
-            depth=depth,
-            audit=audit,
-            retrieval=retrieval,
-            latency_ms=latency_ms,
-        )
+        # Every exchange is recorded, grounded or not. Telemetry carries routing
+        # metadata only, so without this the only student questions a tutor could
+        # read were the ones RAG had already failed on.
+        #
+        # Guarded by ``self.persist``: the evaluation harness runs this exact
+        # pipeline with persistence off so its synthetic turns are never written
+        # to the production ``chat_turns`` / ``unanswered_questions`` /
+        # ``telemetry_logs`` tables (defect C8).
+        log_id: Optional[int] = None
+        if self.persist:
+            self._record_turn(
+                request=request,
+                intent=intent,
+                retrieval=retrieval,
+                audit=audit,
+                message_id=message_id,
+                answer_text=draft.text,
+                latency_ms=latency_ms,
+            )
+
+            # Human Adjustment Cycle (section 17): if RAG could not ground the
+            # question, queue it for a tutor instead of letting the model answer
+            # from its parametric memory. A weak guardrail flag also queues it.
+            self._queue_if_ungrounded(
+                request=request,
+                intent=intent,
+                retrieval=retrieval,
+                audit=audit,
+                message_id=message_id,
+            )
+
+            log_id = self._log_telemetry(
+                request=request,
+                message_id=message_id,
+                intent=intent,
+                stage=stage,
+                depth=depth,
+                audit=audit,
+                retrieval=retrieval,
+                latency_ms=latency_ms,
+            )
 
         return WorkflowResult(
             session_id=request.session_id,
@@ -164,6 +248,11 @@ class TutoringWorkflow:
             retrieval={
                 "chunks": [c.to_dict() for c in retrieval.chunks],
                 "patterns": [p.to_dict() for p in retrieval.patterns],
+                "citations": retrieval.citations(),
+                "grounding_categories": retrieval.grounding_categories,
+                "third_party_fallback": retrieval.third_party_fallback,
+                "below_threshold": retrieval.below_threshold,
+                "context_empty": retrieval.is_empty,
             },
             llm=draft.to_dict(),
             telemetry_log_id=log_id,
@@ -177,14 +266,47 @@ class TutoringWorkflow:
                 return module["module_name"]
         return module_id
 
-    def _retrieve(self, request: ChatRequest, intent: Intent) -> RetrievalResult:
-        """Retrieve module-scoped context, degrading gracefully on DB failure."""
+    def _retrieve(
+        self,
+        request: ChatRequest,
+        intent: Intent,
+        stage: str,
+        direct: bool,
+    ) -> RetrievalResult:
+        """Retrieve module-scoped context, degrading gracefully on DB failure.
+
+        Worked solutions are withheld until the session reaches the Explanation
+        stage (or is a factual turn, where answering directly is the intent), so
+        retrieval cannot collapse the Socratic scaffolding (section 7.4).
+
+        A first pass that comes back weak triggers one adaptive second hop: the
+        question is rewritten into alternative phrasings, grounded in the
+        module's own section titles, and the runs are fused by reciprocal rank.
+        This is what lets an abstract question like "why does code reuse matter?"
+        find the inheritance slides instead of falling back to memory.
+        """
         include_patterns = intent.label in {"debugging", "problem_solving"} or bool(
             _CODE_SIGNAL_RE.search(request.message)
         )
+        policy = RetrievalPolicy(
+            allow_answers=bool(direct) or stage == "explanation",
+            include_third_party=settings.retrieval_include_third_party,
+            max_distance=(settings.retrieval_max_distance or None),
+        )
         try:
-            return self.retriever.retrieve(
-                request.message, request.module_id, include_patterns=include_patterns
+            first = self.retriever.retrieve(
+                request.message,
+                request.module_id,
+                include_patterns=include_patterns,
+                policy=policy,
+            )
+            if not (
+                settings.retrieval_expand_on_weak
+                and is_weak_result(first.chunks, weak_distance=settings.retrieval_weak_distance)
+            ):
+                return first
+            return self._retrieve_expanded(
+                request, policy, include_patterns, first
             )
         except Exception as exc:  # noqa: BLE001 - Data Tier must not break the turn
             logger.warning(
@@ -193,6 +315,248 @@ class TutoringWorkflow:
                 exc,
             )
             return RetrievalResult(query=request.message, module_id=request.module_id)
+
+    def _retrieve_expanded(
+        self,
+        request: ChatRequest,
+        policy: RetrievalPolicy,
+        include_patterns: bool,
+        first: RetrievalResult,
+    ) -> RetrievalResult:
+        """Second retrieval hop over rewrites of a question that retrieved weakly."""
+        try:
+            titles = self._module_section_titles(request.module_id)
+            rewrites = self.expander.expand(
+                request.message, self._module_name(request.module_id), titles
+            )
+            if not rewrites:
+                logger.info(
+                    "Weak retrieval for %s but no usable rewrite; keeping the first pass.",
+                    request.module_id,
+                )
+                return first
+
+            runs: list[RetrievalResult] = [first]
+            for rewrite in rewrites:
+                runs.append(
+                    self.retriever.retrieve(
+                        rewrite,
+                        request.module_id,
+                        include_patterns=False,
+                        policy=policy,
+                    )
+                )
+
+            merged = self._fuse(first, runs, request, policy, include_patterns)
+            if merged is not None:
+                logger.info(
+                    "Expanded %r into %d rewrite(s); grounding improved "
+                    "(best distance %.3f -> %.3f)",
+                    request.message[:50],
+                    len(rewrites),
+                    first.chunks[0].distance if first.chunks else float("nan"),
+                    merged.chunks[0].distance if merged.chunks else float("nan"),
+                )
+                return merged
+            return first
+        except Exception as exc:  # noqa: BLE001 - enhancement must not break the turn
+            logger.warning("Query expansion failed, using the first pass: %s", exc)
+            return first
+
+    def _module_section_titles(self, module_id: str) -> list[str]:
+        """Section headings for a module, biggest sections first.
+
+        Ordered by how many chunks a heading covers rather than by a hand-tuned
+        keyword list, because a heading that spans a lot of the material is a
+        core topic by definition, while a one-chunk heading is usually incidental
+        ("index", "credits", "Slide 7:"). That signal is free: it is a GROUP BY on
+        data already ingested, and it held up where a regex heuristic did not -
+        scoring headings by word count promoted "index" and "next" over
+        "Inheritance", and penalising long headings hid "Abstract class vs
+        Interface".
+
+        Capped, because the expander prompt is prefilled with these on a CPU-only
+        host: 60 titles cost ~374 words of prefill and a measured 72s per call,
+        against 42-74s for a whole tutor turn.
+        """
+        try:
+            with session_scope() as session:
+                ranked = list(
+                    session.execute(
+                        select(CurriculumChunk.section_title, func.count())
+                        .where(
+                            CurriculumChunk.module_id == module_id,
+                            CurriculumChunk.section_title.isnot(None),
+                        )
+                        .group_by(CurriculumChunk.section_title)
+                        .order_by(func.count().desc())
+                    ).all()
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Could not list section titles for %s: %s", module_id, exc)
+            return []
+
+        seen: dict[str, str] = {}
+        for title, _count in ranked:
+            cleaned = _normalise_title(title)
+            if not cleaned or _UNINFORMATIVE_TITLE_RE.match(cleaned):
+                continue
+            key = cleaned.casefold()
+            if key not in seen:
+                seen[key] = cleaned
+            if len(seen) >= settings.retrieval_expand_titles:
+                break
+        return list(seen.values())
+
+    def _fuse(
+        self,
+        first: RetrievalResult,
+        runs: list[RetrievalResult],
+        request: ChatRequest,
+        policy: RetrievalPolicy,
+        include_patterns: bool,
+    ) -> Optional[RetrievalResult]:
+        """Merge several runs into one result, keeping the original query string.
+
+        Citation keys are re-assigned after fusion so ``[C1]`` in a reply still
+        matches the source list the student sees.
+        """
+        by_id: dict[int, RetrievedChunk] = {}
+        for run in runs:
+            for chunk in run.chunks:
+                existing = by_id.get(chunk.chunk_id)
+                if existing is None or chunk.distance < existing.distance:
+                    by_id[chunk.chunk_id] = chunk
+        if not by_id:
+            return None
+
+        ordered_ids = reciprocal_rank_fusion(
+            [[c.chunk_id for c in run.chunks] for run in runs if run.chunks]
+        )
+        pool = {c.chunk_id: c for c in first.chunks}
+        for run in runs[1:]:
+            pool.update({c.chunk_id: c for c in run.chunks})
+
+        merged = RetrievalResult(
+            query=first.query,
+            module_id=first.module_id,
+            policy=first.policy,
+        )
+        limit = getattr(self.retriever, "top_k", 3) or 3
+        # RRF decides which chunks survive; distance decides the order they are
+        # shown in, so the closest match leads the prompt rather than whatever
+        # several runs happened to agree on.
+        survivors = sorted(
+            (by_id[cid] for cid in ordered_ids[: limit * 2] if cid in by_id),
+            key=lambda c: c.distance,
+        )
+        for chunk in survivors:
+            # Skip a chunk from a document already in context, so the reply reads
+            # as one passage instead of two fragments of the same slide deck.
+            if merged.chunks and merged.chunks[-1].source_file == chunk.source_file:
+                continue
+            chunk.cite_key = f"C{len(merged.chunks) + 1}"
+            merged.chunks.append(chunk)
+            if len(merged.chunks) >= limit:
+                break
+        if not merged.chunks:
+            return None
+        if include_patterns:
+            merged.patterns = first.patterns
+        # `merged` is a fresh result, so it carries none of the contributing runs'
+        # flags. Re-derive the disclosure, or a merged turn made entirely of
+        # textbook chunks is presented to the student as course material.
+        merged.sync_third_party_flag()
+        return merged
+
+    @staticmethod
+    def _record_turn(
+        *,
+        request: ChatRequest,
+        intent: Intent,
+        retrieval: RetrievalResult,
+        audit: GuardrailResult,
+        message_id: str,
+        answer_text: Optional[str],
+        latency_ms: Optional[int] = None,
+    ) -> None:
+        """Persist the exchange, grounded or not.
+
+        ``telemetry_logs`` records routing metadata only, so without this a
+        student asking something well-grounded-but-unhelpful left no record at
+        all - and the tutor queue could only ever show RAG failures. That is half
+        the Human Adjustment Cycle missing.
+
+        Best-effort: a failure here must never cost the student their answer.
+        """
+        try:
+            from ..chatlog import record_turn
+
+            grounded = not retrieval.is_empty
+            record_turn(
+                session_id=request.session_id,
+                message_id=message_id,
+                user_id=request.user_id,
+                student_id=request.student_id,
+                module_id=request.module_id,
+                question_text=request.message,
+                answer_text=answer_text,
+                intent=intent.label,
+                grounding="grounded" if grounded else "ungrounded",
+                cited_chunk_ids=[c.chunk_id for c in retrieval.chunks],
+                guardrail_flagged=bool(audit.flagged),
+                was_bypass=intent.label == "bypass",
+                response_latency_ms=latency_ms,
+            )
+        except Exception as exc:  # noqa: BLE001 - telemetry must not break a reply
+            logger.warning("Could not record the chat turn: %s", exc)
+
+    @staticmethod
+    def _queue_if_ungrounded(
+        *,
+        request: ChatRequest,
+        intent: Intent,
+        retrieval: RetrievalResult,
+        audit: GuardrailResult,
+        message_id: str,
+    ) -> None:
+        """Send a question to the tutor queue when it was not grounded in material.
+
+        Deliberately conservative: only genuinely ungrounded turns are queued, so
+        the queue stays a short list of real curriculum gaps rather than every
+        question a student ever asked.
+        """
+        try:
+            no_grounding = retrieval.is_empty
+            weak_guardrail = bool(audit.flagged)
+            if not (no_grounding or weak_guardrail):
+                return
+            if intent.label == "bypass":
+                # A bypass attempt is a pedagogical event, not a curriculum gap.
+                return
+            reason = (
+                "student_flagged"
+                if weak_guardrail and not no_grounding
+                else classify_reason(
+                    chunk_count=len(retrieval.chunks),
+                    below_threshold=retrieval.below_threshold,
+                    third_party_fallback=retrieval.third_party_fallback,
+                    grounded_categories=retrieval.grounding_categories,
+                )
+            )
+            best = min((c.distance for c in retrieval.chunks), default=None)
+            record_ungrounded(
+                question_text=request.message,
+                module_id=request.module_id,
+                reason=reason,
+                session_id=request.session_id,
+                message_id=message_id,
+                student_id=request.student_id,
+                intent=intent.label,
+                best_distance=best,
+            )
+        except Exception as exc:  # noqa: BLE001 - never break a reply
+            logger.warning("Could not evaluate question for the tutor queue: %s", exc)
 
     @staticmethod
     def _count_session_turns(session_id: str) -> int:
@@ -249,6 +613,8 @@ class TutoringWorkflow:
                     retrieved_code_pattern_ids=retrieval.pattern_ids,
                     embedding_model=settings.embedding_model_name,
                     response_latency_ms=latency_ms,
+                    retrieval_categories=retrieval.grounding_categories,
+                    third_party_fallback=retrieval.third_party_fallback,
                 )
                 session.add(log)
                 session.flush()

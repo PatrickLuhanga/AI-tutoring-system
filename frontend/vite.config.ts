@@ -15,6 +15,14 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
       },
+      // The corpus pages are served by Flask too, not by the SPA. Without this
+      // a citation link such as /resources/IPRT301/slides/01_Inheritance.md
+      // falls through to Vite's SPA fallback and silently renders the React app
+      // shell instead of the notes - a 200 that shows the wrong thing.
+      '/resources': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
     },
   },
 })

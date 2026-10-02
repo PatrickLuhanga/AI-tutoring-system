@@ -1,70 +1,86 @@
 """RAG retrieval (Tier 2, section 8 of the architecture document).
 
-Hybrid search ported from the StatSSA Rafiki RAG design
-(https://github.com/voltedge-africa/statssa-rafiki):
+Given a student's query the retriever:
 
-1. Tokenise the query, drop stopwords and keep only *discriminative* terms -
-   terms that occur in the corpus but in at most ``RETRIEVAL_MAX_DF_RATIO`` of
-   its source documents (so boilerplate words like "java" or "module" cannot
-   match the whole corpus).
-2. Run two module-filtered branches in parallel:
-   * keyword search - ``ts_rank_cd`` over the generated ``content_tsv`` column
-     (PostgreSQL full-text, ``simple`` config), OR-ing the quoted terms;
-   * semantic search - pgvector cosine distance, gated by a minimum similarity
-     that tightens when the query has no corpus-grounded terms at all.
-3. Fuse the two rankings with Reciprocal Rank Fusion
-   (``score = weight / (RRF_K + rank)`` summed across branches) and return the
-   top-k chunks.
+1. embeds it with the local ``all-MiniLM-L6-v2`` model,
+2. applies the module metadata filter **before** the similarity search, and
+3. returns the top-k curriculum chunks plus, where relevant, module-scoped
+   code-repair patterns.
 
-The ``RetrievedChunk`` / ``RetrievedPattern`` dataclasses and the ``module_id``
-metadata filter are unchanged from the semantic-only implementation.
+The module filter is what stops material from one subject leaking into another
+(the same word - "class" - means different things in different modules).
+
+Two further guards keep retrieval honest:
+
+``is_answer`` chunks (worked solutions and model answers) are withheld until the
+Scaffolding Engine reaches the Explanation stage, so retrieval cannot hand the
+model a finished solution to copy (section 7.4).
+
+Third-party material (commercial textbooks) is excluded by default and only
+included on request, or as a fallback when the module's own material yields
+nothing - so a student is never left with an empty context, but the tutor
+preferentially cites the faculty-approved course material.
 """
 
 from __future__ import annotations
 
 import logging
-import math
 import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, or_, select, text
 
 from .config import settings
+from .corpus_render import citation_url
 from .db import session_scope
 from .embeddings import get_embedder
+from .loaders import THIRD_PARTY_CATEGORIES
 from .models import CodeRepairPattern, CurriculumChunk
 
 logger = logging.getLogger(__name__)
 
-#: Words that carry no discriminative signal in a student query (subset of the
-#: StatSSA Rafiki stopword list).
-STOPWORDS = frozenset(
-    {
-        "a", "about", "an", "and", "are", "as", "at", "based", "be", "been", "by",
-        "can", "could", "describe", "did", "do", "does", "explain", "for", "from",
-        "give", "had", "has", "have", "he", "her", "his", "how", "i", "in", "into",
-        "is", "it", "its", "like", "list", "me", "my", "need", "of", "on",
-        "opinion", "or", "our", "over", "provide", "regarding", "she", "should",
-        "show", "so", "support", "tell", "than", "that", "the", "their", "them",
-        "then", "there", "these", "they", "this", "those", "to", "us", "use",
-        "used", "using", "want", "was", "we", "were", "what", "when", "where",
-        "which", "who", "why", "will", "with", "would", "you", "your",
-    }
-)
-
-_TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+#: Tags the ingested textbooks leave inside heading text, e.g. the stored title
+#: ``<u>PART I</u> Introduction to Flask``. Stripped for display only - the
+#: citation anchor is still derived from the raw title so it keeps matching the
+#: id the page renderer emits for that heading.
+_MARKUP = re.compile(r"<[^>]+>")
+_WHITESPACE = re.compile(r"\s+")
 
 
-def _tokenize(query: str) -> list[str]:
-    """Lowercase alphanumeric terms, deduped, without stopwords or 1-char tokens."""
-    terms = _TOKEN_RE.findall(query.lower())
-    return [term for term in dict.fromkeys(terms) if len(term) > 1 and term not in STOPWORDS]
+def plain_title(title: Optional[str]) -> Optional[str]:
+    """Return ``title`` with inline markup removed, for display and prompting.
+
+    507 of the 4,080 ingested chunks carry HTML from the source textbooks, which
+    otherwise reaches the student as literal ``<u>CHAPTER 16</u>`` in the sources
+    panel and as noise in the tutor's prompt.
+    """
+    if not title:
+        return title
+    cleaned = _WHITESPACE.sub(" ", _MARKUP.sub("", title)).strip()
+    return cleaned or title
 
 
-def _ts_query(terms: list[str]) -> str:
-    """OR the terms into a ``tsquery`` literal; terms are already alphanumeric."""
-    return " | ".join(f"'{term}'" for term in terms)
+
+@dataclass(frozen=True)
+class RetrievalPolicy:
+    """Per-turn retrieval constraints derived from the Scaffolding Engine.
+
+    ``allow_answers`` must only be true once the session has earned an
+    explanation, otherwise a single retrieval can collapse the scaffolding.
+    """
+
+    allow_answers: bool = False
+    include_third_party: bool = False
+    max_distance: Optional[float] = None
+
+    @classmethod
+    def default(cls) -> "RetrievalPolicy":
+        return cls(
+            allow_answers=False,
+            include_third_party=settings.retrieval_include_third_party,
+            max_distance=(settings.retrieval_max_distance or None),
+        )
 
 
 @dataclass(slots=True)
@@ -76,17 +92,30 @@ class RetrievedChunk:
     section_title: Optional[str]
     text: str
     distance: float
+    source_category: str = "notes"
+    is_answer: bool = False
+    #: Citation label shown to the model and rendered as a link for the student,
+    #: e.g. ``C1``.
+    cite_key: str = ""
+    #: Deep link into the rendered corpus page, anchored on this chunk's section.
+    url: str = ""
+    anchor: str = ""
 
     def to_dict(self) -> dict:
         return {
             "chunk_id": self.chunk_id,
+            "cite_key": self.cite_key,
             "module_id": self.module_id,
             "source_name": self.source_name,
+            "source_file": self.source_file,
             "section_title": self.section_title,
             "distance": round(self.distance, 4),
+            "source_category": self.source_category,
+            "is_answer": self.is_answer,
+            "url": self.url,
+            "anchor": self.anchor,
             "preview": (self.text or "")[:240],
         }
-
 
 @dataclass(slots=True)
 class RetrievedPattern:
@@ -115,6 +144,11 @@ class RetrievalResult:
     module_id: str
     chunks: list[RetrievedChunk] = field(default_factory=list)
     patterns: list[RetrievedPattern] = field(default_factory=list)
+    #: Diagnostics for telemetry and evaluation: how the policy shaped the result.
+    policy: Optional[RetrievalPolicy] = None
+    third_party_fallback: bool = False
+    relaxed_answer_filter: bool = False
+    below_threshold: int = 0
 
     @property
     def chunk_ids(self) -> list[int]:
@@ -124,12 +158,43 @@ class RetrievalResult:
     def pattern_ids(self) -> list[int]:
         return [pattern.pattern_id for pattern in self.patterns]
 
+    @property
+    def is_empty(self) -> bool:
+        return not self.chunks and not self.patterns
+
+    @property
+    def grounding_categories(self) -> list[str]:
+        """Provenance classes actually present in the prompt context."""
+        return sorted({c.source_category for c in self.chunks})
+
+    def sync_third_party_flag(self) -> None:
+        """Re-derive the third-party disclosure from the chunks actually served.
+
+        ``third_party_fallback`` is a disclosure the UI renders as "none of your
+        module material matched", so it has to describe the context the student is
+        shown rather than the route that produced it. Both retrieval passes that
+        can hand back textbook chunks have to call this: the widening branch in
+        :meth:`Retriever.retrieve`, and the reciprocal-rank merge in
+        ``TutoringWorkflow._fuse`` - which builds a fresh result and would
+        otherwise silently reset the flag to its ``False`` default.
+        """
+        if any(c.source_category in THIRD_PARTY_CATEGORIES for c in self.chunks):
+            self.third_party_fallback = True
+
     def context_text(self) -> str:
-        """Flatten everything retrieved into one prompt-ready block."""
+        """Flatten everything retrieved into one prompt-ready block.
+
+        Each curriculum block carries a citation label, its source document and
+        its section heading, because the prompt asks the tutor to attribute each
+        claim. A student can then follow the label to the exact notes.
+        """
         blocks: list[str] = []
-        for index, chunk in enumerate(self.chunks, start=1):
-            title = chunk.section_title or chunk.source_name
-            blocks.append(f"[Curriculum {index}] {title}\n{chunk.text}")
+        for chunk in self.chunks:
+            label = chunk.cite_key or f"C{self.chunks.index(chunk) + 1}"
+            title = plain_title(chunk.section_title) or chunk.source_name
+            blocks.append(
+                f"[{label}] {chunk.source_file} :: \"{title}\"\n{chunk.text}"
+            )
         for index, pattern in enumerate(self.patterns, start=1):
             blocks.append(
                 f"[Code pattern {index}] {pattern.error_title} "
@@ -138,56 +203,27 @@ class RetrievalResult:
             )
         return "\n\n".join(blocks)
 
-
-# ---------------------------------------------------------------------------
-# Fusion bookkeeping
-# ---------------------------------------------------------------------------
-@dataclass(slots=True)
-class _FusedHit:
-    chunk_id: int
-    module_id: str
-    source_name: str
-    source_file: str
-    section_title: Optional[str]
-    text: str
-    distance: float
-    score: float = 0.0
-    keyword_rank: Optional[int] = None
-    vector_rank: Optional[int] = None
-
-
-def _rrf_score(rank: int, weight: float) -> float:
-    return weight / (settings.retrieval_rrf_k + rank)
-
-
-def _fuse(keyword: list[_FusedHit], semantic: list[_FusedHit]) -> list[_FusedHit]:
-    """Reciprocal Rank Fusion of the two ranked lists (score = w/(RRF_K + rank))."""
-    merged: dict[int, _FusedHit] = {}
-    keyword_weight = settings.retrieval_keyword_weight
-    vector_weight = settings.retrieval_vector_weight
-
-    for index, hit in enumerate(keyword):
-        hit.keyword_rank = index + 1
-        hit.score += _rrf_score(index + 1, keyword_weight)
-        merged[hit.chunk_id] = hit
-
-    for index, hit in enumerate(semantic):
-        contribution = _rrf_score(index + 1, vector_weight)
-        existing = merged.get(hit.chunk_id)
-        if existing is not None:
-            existing.score += contribution
-            existing.vector_rank = index + 1
-            existing.distance = hit.distance
-        else:
-            hit.vector_rank = index + 1
-            hit.score += contribution
-            merged[hit.chunk_id] = hit
-
-    return sorted(merged.values(), key=lambda hit: hit.score, reverse=True)
+    def citations(self) -> list[dict]:
+        """Citation list for the API response, in the order the model saw them."""
+        return [
+            {
+                "cite_key": chunk.cite_key,
+                "module_id": chunk.module_id,
+                "source_file": chunk.source_file,
+                "section_title": plain_title(chunk.section_title),
+                "url": chunk.url,
+                "anchor": chunk.anchor,
+                "distance": round(chunk.distance, 4),
+                "source_category": chunk.source_category,
+                "is_answer": chunk.is_answer,
+            }
+            for chunk in self.chunks
+            if chunk.cite_key
+        ]
 
 
 class Retriever:
-    """Hybrid module-scoped retrieval (tsvector keyword + pgvector semantic + RRF)."""
+    """Module-scoped semantic search over the pgvector store."""
 
     def __init__(self, top_k: Optional[int] = None, code_top_k: Optional[int] = None) -> None:
         self.top_k = top_k or settings.retrieval_top_k
@@ -199,157 +235,183 @@ class Retriever:
         module_id: str,
         *,
         include_patterns: bool = True,
+        policy: Optional[RetrievalPolicy] = None,
     ) -> RetrievalResult:
         """Return the top-k chunks (and patterns) for ``query`` in ``module_id``."""
-        result = RetrievalResult(query=query, module_id=module_id)
+        policy = policy or RetrievalPolicy.default()
+        result = RetrievalResult(query=query, module_id=module_id, policy=policy)
         if not query or not query.strip():
             return result
 
         vector = get_embedder().encode_one(query)
         with session_scope() as session:
-            result.chunks = self._search_curriculum(session, query, vector, module_id)
+            self._tune_ann(session)
+            result.chunks, result.below_threshold = self._search_curriculum(
+                session, vector, module_id, policy
+            )
+            # If the module's own material did not satisfy the request, widen the
+            # net rather than hand the model an empty or near-empty context. One
+            # weak hit (a README line, say) is not a usable answer, so the test is
+            # "fewer than top_k", not "none".
+            if (
+                len(result.chunks) < self.top_k
+                and not policy.include_third_party
+                and settings.retrieval_third_party_fallback
+            ):
+                # Widening exists so a thin module result does not leave the tutor
+                # with no context, but a textbook chapter about an unrelated topic
+                # is worse than no context: the tutor cites it, so the student is
+                # shown a confident answer attributed to their course material that
+                # never said it. Require the widened hits to be clearly closer than
+                # the module's own weakest hit before substituting them.
+                floor = result.chunks[-1].distance if result.chunks else None
+                ceiling = policy.max_distance
+                if floor is not None:
+                    ceiling = min(ceiling, floor) if ceiling is not None else floor
+                widened = RetrievalPolicy(
+                    allow_answers=policy.allow_answers,
+                    include_third_party=True,
+                    max_distance=ceiling,
+                )
+                module_hits = len(result.chunks)
+                module_below = result.below_threshold
+                chunks, below = self._search_curriculum(session, vector, module_id, widened)
+                if len(chunks) > module_hits:
+                    result.chunks = chunks
+                    result.below_threshold = below
+                    result.third_party_fallback = True
+                    result.policy = widened
+                    logger.info(
+                        "Only %d module chunk(s) for %r in %s; widened to %d third-party chunk(s) "
+                        "at distance <= %.4f",
+                        module_hits,
+                        query[:60],
+                        module_id,
+                        len(chunks) - module_hits,
+                        ceiling if ceiling is not None else float("nan"),
+                    )
+                else:
+                    logger.info(
+                        "Only %d module chunk(s) for %r in %s; no third-party content was close "
+                        "enough to substitute",
+                        module_hits,
+                        query[:60],
+                        module_id,
+                    )
+                    result.below_threshold = module_below
             if include_patterns:
-                result.patterns = self._search_patterns(session, query, vector, module_id)
+                result.patterns = self._search_patterns(session, vector, module_id)
+
+        # Disclosure must describe the chunks that were actually returned, not
+        # just the branch that produced them - see sync_third_party_flag.
+        result.sync_third_party_flag()
 
         logger.info(
-            "Retrieved %d chunks and %d patterns for module %s",
+            "Retrieved %d chunks and %d patterns for module %s "
+            "(answers_allowed=%s, third_party_fallback=%s, below_threshold=%d)",
             len(result.chunks),
             len(result.patterns),
             module_id,
+            policy.allow_answers,
+            result.third_party_fallback,
+            result.below_threshold,
         )
         return result
 
-    # -- Curriculum chunks ---------------------------------------------------
-    def _search_curriculum(
-        self, session, query: str, vector: list[float], module_id: str
-    ) -> list[RetrievedChunk]:
-        if not settings.retrieval_hybrid_enabled:
-            return self._semantic_chunks_only(session, vector, module_id, self.top_k)
+    # -- Internals ----------------------------------------------------------
+    @staticmethod
+    def _tune_ann(session) -> None:
+        """Apply HNSW tuning for this transaction.
 
-        pool = max(self.top_k * settings.retrieval_hybrid_pool_factor, settings.retrieval_hybrid_min_pool)
+        With a metadata filter, pgvector's HNSW index filters *after* the ANN scan,
+        so a selective ``module_id`` filter can return fewer rows than ``top_k`` (or
+        none) even when matching rows exist. ``hnsw.iterative_scan`` (pgvector >= 0.8)
+        keeps scanning until enough filtered rows are found. Both settings are
+        transaction-local so they never leak into pooled connections.
+        """
+        mode = (settings.hnsw_iterative_scan or "off").lower()
+        if mode in {"off", ""}:
+            return
         try:
-            terms = self._discriminative_terms(session, CurriculumChunk, query, module_id)
-        except Exception as exc:  # noqa: BLE001 - keyword branch must not kill the turn
-            logger.warning("Discriminative-term scan failed; disabling keyword branch: %s", exc)
-            terms = []
-
-        min_similarity = (
-            settings.retrieval_min_similarity if terms else settings.retrieval_strict_similarity
-        )
-        semantic = self._vector_hits(session, CurriculumChunk, vector, module_id, pool, min_similarity)
-
-        keyword: list[_FusedHit] = []
-        if terms:
-            try:
-                keyword = self._keyword_hits(session, CurriculumChunk, terms, module_id, pool)
-            except Exception as exc:  # noqa: BLE001 - degrade to semantic-only
-                logger.warning("Keyword branch failed; using semantic ranking only: %s", exc)
-
-        fused = _fuse(keyword, semantic) if keyword else semantic
-        return [
-            RetrievedChunk(
-                chunk_id=hit.chunk_id,
-                module_id=hit.module_id,
-                source_name=hit.source_name,
-                source_file=hit.source_file,
-                section_title=hit.section_title,
-                text=hit.text,
-                distance=hit.distance,
+            session.execute(
+                text("SET LOCAL hnsw.iterative_scan = :mode"), {"mode": mode}
             )
-            for hit in fused[: self.top_k]
-        ]
+            session.execute(
+                text("SET LOCAL hnsw.ef_search = :ef"), {"ef": int(settings.hnsw_ef_search)}
+            )
+        except Exception as exc:  # noqa: BLE001 - older pgvector lacks the GUC
+            logger.warning("Could not apply hnsw.iterative_scan=%r: %s", mode, exc)
 
-    def _semantic_chunks_only(self, session, vector: list[float], module_id: str, limit: int) -> list[RetrievedChunk]:
-        """Pure-cosine fallback used when hybrid retrieval is disabled."""
+    def _search_curriculum(
+        self, session, vector: list[float], module_id: str, policy: RetrievalPolicy
+    ) -> tuple[list[RetrievedChunk], int]:
         distance = CurriculumChunk.embedding.cosine_distance(vector).label("distance")
+
+        conditions = [CurriculumChunk.module_id == module_id]
+        if not policy.allow_answers:
+            conditions.append(CurriculumChunk.is_answer.is_(False))
+        if not policy.include_third_party:
+            conditions.append(
+                CurriculumChunk.source_category.notin_(sorted(THIRD_PARTY_CATEGORIES))
+            )
+
+        # Over-fetch so the distance floor can discard weak matches without
+        # returning fewer than top_k good ones.
+        fetch = self.top_k * 3
         rows = (
             session.execute(
                 select(CurriculumChunk, distance)
-                .where(CurriculumChunk.module_id == module_id)
+                .where(and_(*conditions))
                 .order_by(distance)
-                .limit(limit)
+                .limit(fetch)
             )
             .all()
         )
-        return [
-            RetrievedChunk(
-                chunk_id=chunk.chunk_id,
-                module_id=chunk.module_id,
-                source_name=chunk.source_name,
-                source_file=chunk.source_file,
-                section_title=chunk.section_title,
-                text=chunk.chunk_text,
-                distance=float(dist),
+
+        chunks: list[RetrievedChunk] = []
+        dropped = 0
+        ceiling = policy.max_distance
+        for chunk, dist in rows:
+            if ceiling is not None and float(dist) > ceiling:
+                dropped += 1
+                continue
+            url, anchor = citation_url(
+                chunk.module_id, chunk.source_file, chunk.section_title
             )
-            for chunk, dist in rows
-        ]
-
-    # -- Code-repair patterns ------------------------------------------------
-    def _search_patterns(
-        self, session, query: str, vector: list[float], module_id: str
-    ) -> list[RetrievedPattern]:
-        # Patterns tagged for this module, plus "general" patterns with no tag.
-        module_clause = or_(
-            CodeRepairPattern.module_id == module_id,
-            CodeRepairPattern.module_id.is_(None),
-        )
-
-        if not settings.retrieval_hybrid_enabled:
-            rows = self._semantic_patterns_only(session, vector, module_clause, self.code_top_k)
-            return rows
-
-        pool = max(self.code_top_k * settings.retrieval_hybrid_pool_factor, settings.retrieval_hybrid_min_pool)
-        try:
-            terms = self._discriminative_terms(session, CodeRepairPattern, query, module_id, module_clause)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Pattern discriminative-term scan failed; disabling keyword branch: %s", exc)
-            terms = []
-
-        min_similarity = (
-            settings.retrieval_min_similarity if terms else settings.retrieval_strict_similarity
-        )
-        semantic = self._vector_hits(session, CodeRepairPattern, vector, module_id, pool, min_similarity, module_clause)
-
-        keyword: list[_FusedHit] = []
-        if terms:
-            try:
-                keyword = self._keyword_hits(session, CodeRepairPattern, terms, module_id, pool, module_clause)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Pattern keyword branch failed; using semantic ranking only: %s", exc)
-
-        # The pattern corpus is tiny and semantically strong, so a keyword-only
-        # match (no semantic grounding) is almost always a false positive (e.g.
-        # the word "java" in an unrelated snippet). Only fuse keyword hits that
-        # the gated semantic branch also surfaced.
-        semantic_ids = {hit.chunk_id for hit in semantic}
-        keyword = [hit for hit in keyword if hit.chunk_id in semantic_ids]
-
-        fused = _fuse(keyword, semantic) if keyword else semantic
-        rows = session.execute(
-            select(CodeRepairPattern).where(CodeRepairPattern.pattern_id.in_([h.chunk_id for h in fused[: self.code_top_k]]))
-        ).scalars().all() if fused else []
-        pattern_by_id = {pattern.pattern_id: pattern for pattern in rows}
-        return [
-            RetrievedPattern(
-                pattern_id=hit.chunk_id,
-                module_id=pattern_by_id[hit.chunk_id].module_id,
-                error_title=pattern_by_id[hit.chunk_id].error_title,
-                exception_thrown=pattern_by_id[hit.chunk_id].exception_thrown,
-                conceptual_tutor_hint=pattern_by_id[hit.chunk_id].conceptual_tutor_hint,
-                broken_code=pattern_by_id[hit.chunk_id].broken_code,
-                distance=hit.distance,
+            chunks.append(
+                RetrievedChunk(
+                    chunk_id=chunk.chunk_id,
+                    module_id=chunk.module_id,
+                    source_name=chunk.source_name,
+                    source_file=chunk.source_file,
+                    section_title=chunk.section_title,
+                    text=chunk.chunk_text,
+                    distance=float(dist),
+                    source_category=chunk.source_category,
+                    is_answer=bool(chunk.is_answer),
+                    cite_key=f"C{len(chunks) + 1}",
+                    url=url,
+                    anchor=anchor,
+                )
             )
-            for hit in fused[: self.code_top_k]
-        ]
+            if len(chunks) >= self.top_k:
+                break
+        return chunks, dropped
 
-    def _semantic_patterns_only(self, session, vector: list[float], module_clause, limit: int) -> list[RetrievedPattern]:
+    def _search_patterns(self, session, vector: list[float], module_id: str) -> list[RetrievedPattern]:
         distance = CodeRepairPattern.embedding.cosine_distance(vector).label("distance")
+        # Patterns tagged for this module, plus "general" patterns with no tag.
         rows = (
             session.execute(
                 select(CodeRepairPattern, distance)
-                .where(module_clause)
+                .where(
+                    or_(
+                        CodeRepairPattern.module_id == module_id,
+                        CodeRepairPattern.module_id.is_(None),
+                    )
+                )
                 .order_by(distance)
-                .limit(limit)
+                .limit(self.code_top_k)
             )
             .all()
         )
@@ -365,213 +427,6 @@ class Retriever:
             )
             for pattern, dist in rows
         ]
-
-    # -- Branch primitives ---------------------------------------------------
-    @staticmethod
-    def _doc_id_column(model):
-        """The 'document' identity column used for document-frequency pruning."""
-        return CurriculumChunk.source_file if model is CurriculumChunk else CodeRepairPattern.pattern_id
-
-    def _discriminative_terms(self, session, model, query: str, module_id: str, module_clause=None) -> list[str]:
-        """Terms occurring in >0 and <= MAX_DF_RATIO of the *module's* documents.
-
-        Unlike the StatSSA port (global document frequency), the scope here is
-        the module the query is filtered by anyway: a term shared by most of a
-        module's documents (e.g. "java" inside IPRT301, "research" inside
-        RESK301) carries no discriminative signal within that module.
-        """
-        doc_column = self._doc_id_column(model)
-        scope = model.module_id == module_id if module_clause is None else module_clause
-        total = session.execute(
-            select(func.count(func.distinct(doc_column))).select_from(model).where(scope)
-        ).scalar_one()
-        if not total:
-            return []
-        max_df = max(1, math.floor(total * settings.retrieval_max_df_ratio))
-
-        kept: list[str] = []
-        for term in _tokenize(query):
-            df = session.execute(
-                select(func.count(func.distinct(doc_column)))
-                .select_from(model)
-                .where(scope, model.content_tsv.op("@@")(func.to_tsquery("simple", f"'{term}'")))
-            ).scalar_one()
-            if 0 < df <= max_df:
-                kept.append(term)
-        return kept
-
-    def _term_idf(self, session, model, terms: list[str], module_id: str, module_clause=None) -> dict[str, float]:
-        """IDF weight per term: ln(N / df) + 1, N = module document count."""
-        doc_column = self._doc_id_column(model)
-        scope = model.module_id == module_id if module_clause is None else module_clause
-        total = session.execute(
-            select(func.count(func.distinct(doc_column))).select_from(model).where(scope)
-        ).scalar_one() or 1
-        idf: dict[str, float] = {}
-        for term in terms:
-            df = session.execute(
-                select(func.count(func.distinct(doc_column)))
-                .select_from(model)
-                .where(scope, model.content_tsv.op("@@")(func.to_tsquery("simple", f"'{term}'")))
-            ).scalar_one() or 0
-            idf[term] = math.log(total / max(df, 1)) + 1.0
-        return idf
-
-    @staticmethod
-    def _keyword_score(text: str, terms: list[str], idf: dict[str, float]) -> float:
-        """IDF-weighted term coverage over a chunk's text.
-
-        A term counts when it appears as a standalone lexeme *or* as a substring
-        (camelCase identifiers like ``ChangeListener`` inside
-        ``addChangeListener``), which tsvector's exact lexeme matching misses.
-        """
-        lowered = (text or "").lower()
-        score = 0.0
-        for term in terms:
-            if f" {term} " in f" {lowered} " or term in lowered:
-                score += idf.get(term, 1.0)
-        return score
-
-    @staticmethod
-    def _lexical_text(model, row) -> str:
-        """Full searchable text of a row, for coverage scoring."""
-        if model is CurriculumChunk:
-            return row.chunk_text
-        return f"{row.error_title} {row.broken_code} {row.conceptual_tutor_hint}"
-
-    def _keyword_hits(
-        self,
-        session,
-        model,
-        terms: list[str],
-        module_id: str,
-        limit: int,
-        module_clause=None,
-    ) -> list[_FusedHit]:
-        """Full-text keyword branch.
-
-        Candidates come from two PostgreSQL lookups: the generated ``content_tsv``
-        column (GIN-indexed tsvector match) and a pg_trgm substring sweep for
-        camelCase identifiers that tsvector's exact lexemes miss. Both are then
-        ranked with an IDF-weighted term-coverage score (plus a ts_rank_cd
-        component), so a chunk mentioning a rare query term outranks one that
-        merely repeats a common one.
-        """
-        query_literal = _ts_query(terms)
-        ts_match = model.content_tsv.op("@@")(func.to_tsquery("simple", query_literal))
-        rank_cd = func.ts_rank_cd(model.content_tsv, func.to_tsquery("simple", query_literal))
-        clause = model.module_id == module_id if module_clause is None else module_clause
-        idf = self._term_idf(session, model, terms, module_id, module_clause)
-
-        ts_rows = session.execute(
-            select(model, rank_cd.label("rank_cd")).where(clause, ts_match)
-        ).all()
-
-        lexical = func.lower(self._lexical_text_column(model))
-        substring_any = or_(*[lexical.like(f"%{term}%") for term in terms])
-        sub_rows = session.execute(
-            select(model).where(clause, ~ts_match, substring_any).limit(limit * 4)
-        ).all()
-
-        scored_by_id: dict[int, tuple[float, model, float]] = {}
-        for row, row_rank in ts_rows:
-            text = self._lexical_text(model, row)
-            score = self._keyword_score(text, terms, idf) + 0.5 * float(row_rank or 0.0)
-            scored_by_id[getattr(row, "chunk_id" if model is CurriculumChunk else "pattern_id")] = (score, row, float(row_rank or 0.0))
-        for (row,) in sub_rows:
-            row_id = getattr(row, "chunk_id" if model is CurriculumChunk else "pattern_id")
-            text = self._lexical_text(model, row)
-            score = self._keyword_score(text, terms, idf)
-            if row_id not in scored_by_id or score > scored_by_id[row_id][0]:
-                scored_by_id[row_id] = (score, row, 0.0)
-        scored = sorted(scored_by_id.values(), key=lambda item: item[0], reverse=True)[:limit]
-
-        hits: list[_FusedHit] = []
-        for _score, row, _rank in scored:
-            if model is CurriculumChunk:
-                hits.append(
-                    _FusedHit(
-                        chunk_id=row.chunk_id,
-                        module_id=row.module_id,
-                        source_name=row.source_name,
-                        source_file=row.source_file,
-                        section_title=row.section_title,
-                        text=row.chunk_text,
-                        distance=1.0,
-                    )
-                )
-            else:
-                hits.append(
-                    _FusedHit(
-                        chunk_id=row.pattern_id,
-                        module_id=row.module_id or "",
-                        source_name=row.error_title,
-                        source_file="",
-                        section_title=None,
-                        text=row.conceptual_tutor_hint,
-                        distance=1.0,
-                    )
-                )
-        return hits
-
-    @staticmethod
-    def _lexical_text_column(model):
-        if model is CurriculumChunk:
-            return CurriculumChunk.chunk_text
-        return func.concat(
-            CodeRepairPattern.error_title, " ",
-            CodeRepairPattern.broken_code, " ",
-            CodeRepairPattern.conceptual_tutor_hint,
-        )
-
-    def _vector_hits(
-        self,
-        session,
-        model,
-        vector: list[float],
-        module_id: str,
-        limit: int,
-        min_similarity: float,
-        module_clause=None,
-    ) -> list[_FusedHit]:
-        cosine_distance = model.embedding.cosine_distance(vector)
-        clause = model.module_id == module_id if module_clause is None else module_clause
-        rows = (
-            session.execute(
-                select(model, cosine_distance.label("distance"))
-                .where(clause, model.embedding.is_not(None), (1 - cosine_distance) >= min_similarity)
-                .order_by(cosine_distance)
-                .limit(limit)
-            )
-            .all()
-        )
-        hits: list[_FusedHit] = []
-        for row, distance in rows:
-            if model is CurriculumChunk:
-                hits.append(
-                    _FusedHit(
-                        chunk_id=row.chunk_id,
-                        module_id=row.module_id,
-                        source_name=row.source_name,
-                        source_file=row.source_file,
-                        section_title=row.section_title,
-                        text=row.chunk_text,
-                        distance=float(distance),
-                    )
-                )
-            else:
-                hits.append(
-                    _FusedHit(
-                        chunk_id=row.pattern_id,
-                        module_id=row.module_id or "",
-                        source_name=row.error_title,
-                        source_file="",
-                        section_title=None,
-                        text=row.conceptual_tutor_hint,
-                        distance=float(distance),
-                    )
-                )
-        return hits
 
 
 _RETRIEVER: Optional[Retriever] = None

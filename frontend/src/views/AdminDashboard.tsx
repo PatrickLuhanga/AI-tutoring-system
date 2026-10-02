@@ -93,21 +93,35 @@ export default function AdminDashboard() {
     let cancelled = false
     async function load() {
       setLoading(true)
+      // Settle each call independently. A single rejected request must not leave
+      // the whole panel stuck on the spinner: the model list and the analytics
+      // panel fail independently in practice.
       const [cfg, ollama, telemetry] = await Promise.all([
-        api.getLLMConfig(),
-        api.listOllamaModels(),
-        api.getAnalytics(),
+        api.getLLMConfig().catch((e) => {
+          console.error('llm-config failed', e)
+          return null
+        }),
+        api.listOllamaModels().catch((e) => {
+          console.error('ollama-models failed', e)
+          return null
+        }),
+        api.getAnalytics().catch((e) => {
+          console.error('analytics failed', e)
+          return null
+        }),
       ])
       if (cancelled) return
-      setConfig(cfg)
-      setModels(ollama.models)
+      if (cfg) {
+        setConfig(cfg)
+        setProvider(cfg.provider)
+        setLocalModel(cfg.local.model)
+        setOllamaBaseUrl(cfg.local.base_url)
+        setCloudProvider(cfg.cloud.provider)
+        setCloudBaseUrl(cfg.cloud.base_url)
+        setCloudModel(cfg.cloud.model)
+      }
+      if (ollama) setModels(ollama.models)
       setAnalytics(telemetry)
-      setProvider(cfg.provider)
-      setLocalModel(cfg.local.model)
-      setOllamaBaseUrl(cfg.local.base_url)
-      setCloudProvider(cfg.cloud.provider)
-      setCloudBaseUrl(cfg.cloud.base_url)
-      setCloudModel(cfg.cloud.model)
       setLoading(false)
     }
     void load()
@@ -272,6 +286,7 @@ export default function AdminDashboard() {
                   value={cloudProvider}
                   onChange={(e) => setCloudProvider(e.target.value)}
                 >
+                  <option value="groq">Groq</option>
                   <option value="openai">OpenAI</option>
                   <option value="openai_compatible">OpenAI-compatible</option>
                   <option value="azure_openai">Azure OpenAI</option>
@@ -323,7 +338,7 @@ export default function AdminDashboard() {
               type="button"
               onClick={() => void save()}
               disabled={saving}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-on-accent transition hover:bg-blue-700 disabled:opacity-60"
             >
               {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saving ? 'Saving…' : 'Apply configuration'}

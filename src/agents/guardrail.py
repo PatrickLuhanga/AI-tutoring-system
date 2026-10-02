@@ -28,12 +28,21 @@ _CODE_LINE_RE = re.compile(
     r"System\.out|console\.log|print\s*\(|for\s*\(|while\s*\(|if\s*\(|"
     r"[\w<>\[\]]+\s+\w+\s*=\s*new\b|back\s*=\s)"
 )
+#: Phrasings that hand over a finished artefact.
+#:
+#: The adjective run is ``{0,2}`` rather than a single word because "the complete
+#: working solution" and "the final working code" are ordinary English and both
+#: slipped past a single-adjective pattern - verified with a live audit, where
+#: "Here's the complete working solution:" followed by a code block passed
+#: unflagged.
 _DIRECT_ANSWER_RE = re.compile(
     r"(?i)\b("
-    r"here(?:'| i)?s the (?:full|complete|final|working) (?:code|solution|answer|program)|"
-    r"the (?:full|complete|final|working) (?:code|solution|answer|program) is|"
-    r"this is the (?:full|complete|final|working) (?:code|solution|answer|program)|"
-    r"copy (?:and )?(?:paste )?this|just (?:copy|paste|use) this|"
+    r"(?:here(?:'| i)?s|this is|that is|below is|below are)\s+the\s+"
+    r"(?:(?:full|complete|final|finished|working|ready|correct|polished)\s+){0,2}"
+    r"(?:code|solution|answer|program|implementation|solution)"
+    r"|the\s+(?:(?:full|complete|final|finished|working|ready|correct)\s+){0,2}"
+    r"(?:code|solution|answer|program|implementation)\s+(?:is|below|here)"
+    r"|copy (?:and )?(?:paste )?this|just (?:copy|paste|use) this|"
     r"solve(?:d)? it for you"
     r")\b"
 )
@@ -104,12 +113,26 @@ class GuardrailAgent:
             return GuardrailResult(approved_text=original, flagged=False, original_text=original)
 
         flags: list[str] = []
-        if not allow_direct:
-            code_lines = self._count_code_lines(original)
-            if code_lines > self.max_code_lines:
-                flags.append("code_leak")
-            if _DIRECT_ANSWER_RE.search(original):
-                flags.append("direct_answer")
+        # Size is not route-dependent. A definitional answer may legitimately
+        # include a short snippet, but a 23-line class implementation is never a
+        # definition - it is the finished work, on either track. This check
+        # therefore applies to BOTH routes.
+        #
+        # It used to sit inside `if not allow_direct`, so the direct route skipped
+        # it entirely. The no-scaffolding ablation forces every turn onto the
+        # direct route, so that ablation ran with the leak check switched off, and
+        # its worse leak numbers were measuring the guardrail as much as the
+        # scaffolding. Found by that run: a 23-line DAO implementation and a
+        # 14-line RMI client both passed unflagged.
+        code_lines = self._count_code_lines(original)
+        if code_lines > self.max_code_lines:
+            flags.append("code_leak")
+
+        # Phrasing IS route-dependent: "here is the definition" is correct
+        # behaviour for a factual turn and must not be penalised for it.
+        if not allow_direct and _DIRECT_ANSWER_RE.search(original):
+            flags.append("direct_answer")
+
         if len(_WORD_RE.findall(original)) > self.max_words:
             flags.append("too_long")
         if context.strip() and self._overlap_ratio(original, context) < self.min_context_overlap:

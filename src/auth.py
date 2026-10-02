@@ -38,10 +38,14 @@ class AuthError(Exception):
 @dataclass(slots=True)
 class Identity:
     email: Optional[str]
-    role: str  # student | tutor | admin
+    role: str  # student | tutor | lecturer | admin
     student_id: Optional[int]
     authenticated: bool
-    source: str  # "dev", "sso", "anonymous"
+    source: str  # "dev", "session", "sso", "admin-key", "anonymous"
+    #: Set when the identity came from a login account rather than a dev header.
+    user_id: Optional[int] = None
+    #: Modules this account may act on, from ``user_module_access``.
+    module_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -50,6 +54,8 @@ class Identity:
             "student_id": self.student_id,
             "authenticated": self.authenticated,
             "source": self.source,
+            "user_id": self.user_id,
+            "modules": list(self.module_ids),
         }
 
 
@@ -98,14 +104,67 @@ def _verify_dut4life_token(token: str) -> Optional[str]:
     )
 
 
+def bearer_token(request: Request) -> Optional[str]:
+    """The raw token from ``Authorization: Bearer <token>``, if present."""
+    header = request.headers.get("Authorization") or ""
+    if header.lower().startswith("bearer "):
+        return header[7:].strip() or None
+    return None
+
+
+def identity_from_session(request: Request) -> Identity:
+    """Resolve a login session into an :class:`Identity`.
+
+    Raises :class:`AuthError` when the token is missing, expired, revoked, or
+    belongs to a suspended account.
+    """
+    from .accounts import AccountError, authenticate_request, resolve_module_ids
+
+    try:
+        account = authenticate_request(bearer_token(request))
+    except AccountError as exc:
+        raise AuthError(exc.message, status_code=exc.status_code) from exc
+
+    return Identity(
+        email=account.email,
+        role=account.role,
+        student_id=account.student_id,
+        authenticated=True,
+        source="session",
+        user_id=account.user_id,
+        module_ids=tuple(resolve_module_ids(account.user_id)),
+    )
+
+
+def require_student(request: Request) -> Identity:
+    """Resolve an identity and insist it is a real, signed-in account.
+
+    Used by the routes that used to accept the identity anyone claimed in a
+    header. ``AUTH_MODE=dev`` still permits the header form so curl and the
+    scripts in the docs keep working; ``AUTH_MODE=session`` requires the token.
+    """
+    identity = resolve_identity(request)
+    if not identity.authenticated:
+        raise AuthError("Sign in to continue.", status_code=401)
+    if settings.auth_mode == "session" and identity.source != "session":
+        raise AuthError("Sign in to continue.", status_code=401)
+    return identity
+
+
 def resolve_identity(request: Request) -> Identity:
     """Resolve the caller's identity, role and database link.
 
-    In ``dev`` mode the role/email come from trusted headers (or the JSON body)
-    and are matched against the ``students`` table when possible. In ``strict``
-    mode a DUT4life token is required.
+    A login session always wins when one is presented. Failing that, ``dev`` mode
+    falls back to the trusted headers used by curl and the docs, and ``session``
+    mode refuses the request outright.
     """
     mode = settings.auth_mode
+
+    if bearer_token(request):
+        return identity_from_session(request)
+
+    if mode == "session":
+        raise AuthError("Sign in to continue.", status_code=401)
 
     if mode == "strict":
         token = request.headers.get("X-DUT4life-Token") or ""
@@ -155,20 +214,55 @@ def _load_identity(email: str, requested_role: Optional[str], source: str) -> Id
 # ---------------------------------------------------------------------------
 # Authorization
 # ---------------------------------------------------------------------------
+#: Values that have shipped in a template or a local .env and are therefore
+#: guessable by anyone who has read the repository. Configuring one of these is
+#: treated as "no admin key configured" rather than as a working credential.
+KNOWN_WEAK_ADMIN_KEYS = frozenset(
+    {
+        "",
+        "change-me-admin-key",
+        "change-me",
+        "local-dev-admin-key",
+        "admin",
+        "secret",
+        "password",
+        "test",
+    }
+)
+
+
 def require_admin(request: Request) -> Identity:
     """Authorize an admin-only request via the shared ``X-Admin-Key``.
 
     This is the gateway's admin gate until DUT4life roles are wired; it is
     intentionally separate from the student identity flow.
+
+    Fails closed. An unset key gives 503, and a key still set to one of the
+    placeholder values documented in ``.env.example`` is also rejected. A warning
+    used to be logged and the request served anyway, which meant a deployment that
+    copied the example key was quietly open. Override for a local throwaway with
+    ``ADMIN_ALLOW_WEAK_KEY=true``.
     """
     provided = request.headers.get("X-Admin-Key") or ""
     expected = settings.admin_api_key or ""
+
     if not expected:
-        raise AuthError("Admin API key is not configured on the server.", status_code=503)
+        raise AuthError(
+            "Admin API key is not configured; set ADMIN_API_KEY to enable the admin API.",
+            status_code=503,
+        )
+    if expected.casefold() in KNOWN_WEAK_ADMIN_KEYS and not settings.admin_allow_weak_key:
+        logger.error(
+            "ADMIN_API_KEY is still a placeholder from the example config, so the admin "
+            "API is disabled. Generate a real key, or set ADMIN_ALLOW_WEAK_KEY=true for a "
+            "local throwaway."
+        )
+        raise AuthError(
+            "Admin API key is a known placeholder; the admin API is disabled.",
+            status_code=503,
+        )
     if not provided or not hmac.compare_digest(provided, expected):
         raise AuthError("Invalid or missing admin key.", status_code=401)
-    if expected == "change-me-admin-key":
-        logger.warning("Admin API key is still the insecure default; change ADMIN_API_KEY.")
     return Identity(
         email=request.headers.get("X-User-Email"),
         role="admin",

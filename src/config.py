@@ -103,7 +103,10 @@ SUPPORTED_TEXT_EXTENSIONS = {
     ".pptx",
     ".txt",
     ".md",
+    ".markdown",
     ".java",
+    ".py",
+    ".ipynb",
     ".csv",
     ".html",
     ".htm",
@@ -173,8 +176,6 @@ class Settings:
     embedding_batch_size: int
     embedding_normalize: bool
     embedding_backend: str
-    embedding_doc_prefix: str
-    embedding_query_prefix: str
 
     # Curriculum ingestion
     content_dir: Path
@@ -198,6 +199,15 @@ class Settings:
     # Authentication / authorization
     auth_mode: str
     admin_api_key: str
+    #: Allow a placeholder ADMIN_API_KEY to authenticate. Local throwaway only.
+    admin_allow_weak_key: bool
+    #: Advance the Socratic stages on demonstrated attempts rather than on the
+    #: number of turns elapsed. On a turn count, "ok thanks" five times reaches the
+    #: Explanation stage and unlocks worked solutions without any work shown.
+    scaffolding_evidence_based: bool
+    #: Turns a student may stall at one stage before the ladder moves anyway, so a
+    #: student who never attempts is not stranded by the rule above.
+    scaffolding_max_stalled_turns: int
     enforce_enrollment: bool
     cors_allowed_origins: str
 
@@ -208,33 +218,89 @@ class Settings:
     default_cloud_provider: str
     default_cloud_base_url: str
     default_cloud_model: str
+    #: API key for Groq. Read from ``GROQ_API_KEY`` so the cloud provider can be
+    #: used without first persisting the key through the admin API. The encrypted
+    #: DB value still takes precedence when an admin has rotated it at runtime.
+    groq_api_key: str
     llm_request_timeout: int
     llm_temperature: float
     llm_max_tokens: int
     llm_top_p: float
     llm_config_secret_key: str
     intent_use_llm: bool
+    #: Inject the curriculum-grounded few-shot intent demonstrations
+    #: (``src/agents/few_shot_registry.json``) into the Intent Agent prompt.
+    intent_use_few_shots: bool
+
+    # --- Account-based authentication ------------------------------------
+    #: Session lifetime in hours; a session past this is treated as logged out.
+    session_ttl_hours: int
+    #: Emails a student account may register with. DUT4life student addresses
+    #: are all @dut4life.ac.za; staff and external addresses are rejected.
+    student_email_domain: str
+    #: Emails a lecturer account may register with (academic staff).
+    lecturer_email_domain: str
+    #: Minimum password length enforced at signup.
+    min_password_length: int
+    #: Set false to close registration while leaving existing logins working.
+    allow_self_signup: bool
+
+    # --- Practice tests ----------------------------------------------------
+    #: Questions sampled per practice run when the client does not ask for a size.
+    practice_default_size: int
+    #: Upper bound on a single practice run.
+    practice_max_size: int
+    #: Largest upload accepted, in megabytes.
+    upload_max_mb: int
+    #: File extensions accepted by the upload endpoint.
+    upload_allowed_extensions: tuple[str, ...]
+    #: Shared secret a person must present to register a System Admin account.
+    #: Empty (the default) means admin self-registration is *closed*, which is
+    #: why the value lives in ``.env`` rather than in tracked source: a secret
+    #: committed to git cannot be un-leaked.
+    admin_signup_secret: str
 
     # Inference-tier fault isolation (Ollama circuit breaker)
     ollama_circuit_failure_threshold: int
     ollama_circuit_reset_timeout: float
     ollama_health_timeout: int
 
+    # Ollama "thinking" models (qwen3, deepseek-r1, ...) emit a reasoning
+    # channel before the answer. Left on, they burn the whole num_predict
+    # budget reasoning and return an empty `content`, which the router reads
+    # as a failure. See _generate_ollama in src/llm_router.py.
+    ollama_think: bool
+
     # Retrieval
     retrieval_top_k: int
     retrieval_code_top_k: int
-
-    # Hybrid retrieval (tsvector full-text + pgvector semantic + RRF fusion;
-    # ported from the StatSSA Rafiki RAG design)
-    retrieval_hybrid_enabled: bool
-    retrieval_rrf_k: int
-    retrieval_min_similarity: float
-    retrieval_strict_similarity: float
-    retrieval_max_df_ratio: float
-    retrieval_hybrid_pool_factor: int
-    retrieval_hybrid_min_pool: int
-    retrieval_keyword_weight: float
-    retrieval_vector_weight: float
+    #: Cosine-distance ceiling for a retrieved chunk to be trusted. A chunk further
+    #: away than this is treated as "no relevant course material" rather than being
+    #: pasted into the prompt as if it were relevant. 0 disables the floor.
+    retrieval_max_distance: float
+    #: Third-party material (currently ``source_category='books'``) is excluded by
+    #: default so the tutor prefers the module's own faculty-approved material.
+    retrieval_include_third_party: bool
+    #: When the filtered search returns nothing, retry including third-party
+    #: material rather than answering with an empty context.
+    retrieval_third_party_fallback: bool
+    #: pgvector HNSW behaviour when a metadata filter is applied. ``off`` silently
+    #: returns fewer rows than ``top_k``; ``strict_order`` fixes that. Requires
+    #: pgvector >= 0.8.
+    hnsw_iterative_scan: str
+    hnsw_ef_search: int
+    #: Adaptive retrieval. When a first pass is this weak (nothing returned, or
+    #: the closest chunk further away than this), the question is rewritten into
+    #: alternative search phrasings and retrieved again. Costs one extra
+    #: generation, and only on the turns that need it.
+    retrieval_expand_on_weak: bool
+    #: Cosine distance above which a first-pass result counts as weak.
+    retrieval_weak_distance: float
+    #: How many section titles to show the expander. The rewrite prompt is
+    #: prefilled with them and this host is CPU-only: 60 titles measured 374 words
+    #: of prefill and 72s per call, versus 42-74s for a whole tutor turn. Titles
+    #: are ranked by how much they reveal about the module before the cap applies.
+    retrieval_expand_titles: int
 
     # Guardrail
     guardrail_enabled: bool
@@ -250,6 +316,39 @@ class Settings:
     def resolve_module(self, folder_name: str) -> Optional[Dict[str, str]]:
         """Map a top-level content folder (e.g. ``IPRT``) to its module record."""
         return self.modules.get(folder_name.strip().upper())
+
+    def folder_for_module_id(self, module_id: str) -> Optional[str]:
+        """Inverse of :meth:`resolve_module`: the content folder for a ``module_id``.
+
+        The registry key and the module id are deliberately different strings -
+        the folder on disk is ``IPRT`` while rows and URLs carry ``IPRT301``.
+        Code that walks the corpus by ``module_id`` (the resource routes, the
+        citation builder) has to translate, or it looks in a directory that does
+        not exist.
+        """
+        target = (module_id or "").strip()
+        for folder, record in self.modules.items():
+            if record["module_id"] == target:
+                return folder
+        return None
+
+    def resolve_any(self, identifier: str) -> Optional[tuple[str, Dict[str, str]]]:
+        """Resolve either a registry key (``IPRT``) or a module id (``IPRT301``).
+
+        Returns ``(folder, record)``. URLs and chat payloads carry the module id
+        while the corpus is stored under the folder key, so anything crossing
+        between the two should go through here rather than assuming one spelling.
+        """
+        name = (identifier or "").strip()
+        if not name:
+            return None
+        record = self.modules.get(name.upper())
+        if record is not None:
+            return name.upper(), record
+        for folder, candidate in self.modules.items():
+            if candidate["module_id"] == name:
+                return folder, candidate
+        return None
 
     @property
     def supported_extensions(self) -> set[str]:
@@ -272,14 +371,12 @@ def _build_settings() -> Settings:
     return Settings(
         database_url=_database_url(),
         db_schema=_str("DB_SCHEMA", "public"),
-        embedding_model_name=_str("EMBEDDING_MODEL_NAME", "nomic-embed-text"),
-        embedding_dim=_int("EMBEDDING_DIM", 768),
+        embedding_model_name=_str("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2"),
+        embedding_dim=_int("EMBEDDING_DIM", 384),
         embedding_device=_str("EMBEDDING_DEVICE", "cpu"),
         embedding_batch_size=_int("EMBEDDING_BATCH_SIZE", 64),
         embedding_normalize=_bool("EMBEDDING_NORMALIZE", True),
-        embedding_backend=_str("EMBEDDING_BACKEND", "ollama").lower(),
-        embedding_doc_prefix=_str("EMBEDDING_DOC_PREFIX", "search_document:"),
-        embedding_query_prefix=_str("EMBEDDING_QUERY_PREFIX", "search_query:"),
+        embedding_backend=_str("EMBEDDING_BACKEND", "sentence-transformers").lower(),
         content_dir=content_dir,
         chunk_size=_int("CHUNK_SIZE", 1000),
         chunk_overlap=_int("CHUNK_OVERLAP", 150),
@@ -292,35 +389,73 @@ def _build_settings() -> Settings:
         flask_port=_int("FLASK_PORT", 5000),
         flask_debug=_bool("FLASK_DEBUG", False),
         auth_mode=_str("AUTH_MODE", "dev").lower(),
-        admin_api_key=_str("ADMIN_API_KEY", "change-me-admin-key"),
+        # Fails closed. A shipped default that works is a shipped default that is
+        # never changed: it was "change-me-admin-key", .env.example handed out a
+        # working key, and the local .env ended up using that example value
+        # verbatim. Empty means require_admin() returns 503 and the admin API is
+        # simply unavailable until someone sets a real key.
+        admin_api_key=_str("ADMIN_API_KEY", ""),
+        #: Escape hatch for a local throwaway only. Never set this on a host
+        #: reachable by anyone else; it re-enables a known-placeholder key.
+        admin_allow_weak_key=_bool("ADMIN_ALLOW_WEAK_KEY", False),
+        scaffolding_evidence_based=_bool("SCAFFOLDING_EVIDENCE_BASED", True),
+        scaffolding_max_stalled_turns=_int("SCAFFOLDING_MAX_STALLED_TURNS", 6),
         enforce_enrollment=_bool("ENFORCE_ENROLLMENT", False),
         cors_allowed_origins=_str("CORS_ALLOWED_ORIGINS", "*"),
-        default_llm_provider=_str("LLM_PROVIDER", "local").lower(),
+        # Generative model runs on Groq by default (OpenAI-compatible). The local
+        # Ollama path remains available as an explicit admin choice, but a fresh
+        # install needs no local model server to serve a tutor turn.
+        default_llm_provider=_str("LLM_PROVIDER", "cloud").lower(),
         ollama_base_url=_str("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/"),
-        default_local_model=_str("DEFAULT_LOCAL_MODEL", "qwen3:4b"),
-        default_cloud_provider=_str("DEFAULT_CLOUD_PROVIDER", "openai").lower(),
-        default_cloud_base_url=_str("DEFAULT_CLOUD_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
-        default_cloud_model=_str("DEFAULT_CLOUD_MODEL", "gpt-4o-mini"),
+        # Kept for the optional local fallback, not used by the Groq default.
+        default_local_model=_str("DEFAULT_LOCAL_MODEL", "qwen2.5:3b-instruct"),
+        default_cloud_provider=_str("DEFAULT_CLOUD_PROVIDER", "groq").lower(),
+        default_cloud_base_url=_str("DEFAULT_CLOUD_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/"),
+        default_cloud_model=_str("DEFAULT_CLOUD_MODEL", "llama-3.1-8b-instant"),
+        groq_api_key=_str("GROQ_API_KEY", ""),
         llm_request_timeout=_int("LLM_REQUEST_TIMEOUT", 120),
         llm_temperature=_float("LLM_TEMPERATURE", 0.4),
         llm_max_tokens=_int("LLM_MAX_TOKENS", 1024),
         llm_top_p=_float("LLM_TOP_P", 0.9),
         llm_config_secret_key=_str("LLM_CONFIG_SECRET_KEY", ""),
         intent_use_llm=_bool("INTENT_USE_LLM", True),
+        intent_use_few_shots=_bool("INTENT_USE_FEW_SHOTS", True),
+        session_ttl_hours=_int("SESSION_TTL_HOURS", 12),
+        student_email_domain=_str("STUDENT_EMAIL_DOMAIN", "dut4life.ac.za").lower().lstrip("@"),
+        lecturer_email_domain=_str("LECTURER_EMAIL_DOMAIN", "dut.ac.za").lower().lstrip("@"),
+        min_password_length=_int("MIN_PASSWORD_LENGTH", 8),
+        allow_self_signup=_bool("ALLOW_SELF_SIGNUP", True),
+        practice_default_size=_int("PRACTICE_DEFAULT_SIZE", 5),
+        practice_max_size=_int("PRACTICE_MAX_SIZE", 25),
+        upload_max_mb=_int("UPLOAD_MAX_MB", 25),
+        upload_allowed_extensions=tuple(
+            e.strip().lower().lstrip(".")
+            for e in _str(
+                "UPLOAD_ALLOWED_EXTENSIONS",
+                "pdf,docx,pptx,txt,md,csv",
+            ).split(",")
+            if e.strip()
+        ),
+        admin_signup_secret=_str("ADMIN_SIGNUP_SECRET", ""),
         ollama_circuit_failure_threshold=_int("OLLAMA_CIRCUIT_FAILURE_THRESHOLD", 3),
         ollama_circuit_reset_timeout=_float("OLLAMA_CIRCUIT_RESET_TIMEOUT", 30.0),
         ollama_health_timeout=_int("OLLAMA_HEALTH_TIMEOUT", 5),
-        retrieval_top_k=_int("RETRIEVAL_TOP_K", 6),
+        ollama_think=_bool("OLLAMA_THINK", False),
+        retrieval_top_k=_int("RETRIEVAL_TOP_K", 3),
         retrieval_code_top_k=_int("RETRIEVAL_CODE_TOP_K", 3),
-        retrieval_hybrid_enabled=_bool("RETRIEVAL_HYBRID_ENABLED", True),
-        retrieval_rrf_k=_int("RETRIEVAL_RRF_K", 60),
-        retrieval_min_similarity=_float("RETRIEVAL_MIN_SIMILARITY", 0.60),
-        retrieval_strict_similarity=_float("RETRIEVAL_STRICT_SIMILARITY", 0.78),
-        retrieval_max_df_ratio=_float("RETRIEVAL_MAX_DF_RATIO", 0.3),
-        retrieval_hybrid_pool_factor=_int("RETRIEVAL_HYBRID_POOL_FACTOR", 6),
-        retrieval_hybrid_min_pool=_int("RETRIEVAL_HYBRID_MIN_POOL", 20),
-        retrieval_keyword_weight=_float("RETRIEVAL_KEYWORD_WEIGHT", 1.0),
-        retrieval_vector_weight=_float("RETRIEVAL_VECTOR_WEIGHT", 1.0),
+        # Calibrated against the ingested corpus with all-MiniLM-L6-v2: every
+        # on-topic probe measured came in at 0.38 or below and every mismatched
+        # one at 0.45 or above, so 0.40 sits in that gap. The old 0.75 was loose
+        # enough to answer "what is research" in PBDV301 from a Flask textbook
+        # chapter at distance 0.67.
+        retrieval_max_distance=_float("RETRIEVAL_MAX_DISTANCE", 0.40),
+        retrieval_include_third_party=_bool("RETRIEVAL_INCLUDE_THIRD_PARTY", False),
+        retrieval_third_party_fallback=_bool("RETRIEVAL_THIRD_PARTY_FALLBACK", True),
+        hnsw_iterative_scan=_str("HNSW_ITERATIVE_SCAN", "strict_order").lower(),
+        hnsw_ef_search=_int("HNSW_EF_SEARCH", 80),
+        retrieval_expand_on_weak=_bool("RETRIEVAL_EXPAND_ON_WEAK", True),
+        retrieval_weak_distance=_float("RETRIEVAL_WEAK_DISTANCE", 0.55),
+        retrieval_expand_titles=_int("RETRIEVAL_EXPAND_TITLES", 20),
         guardrail_enabled=_bool("GUARDRAIL_ENABLED", True),
         guardrail_max_code_lines=_int("GUARDRAIL_MAX_CODE_LINES", 8),
         guardrail_max_words=_int("GUARDRAIL_MAX_WORDS", 400),
