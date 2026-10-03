@@ -14,7 +14,14 @@ import type {
   TelemetryAnalytics,
 } from '../types'
 
-export const MOCK = true
+/**
+ * Mock mode is OPT-IN. It used to default on, which meant a deployment that
+ * never set `VITE_USE_MOCK` served the canned C#/debugging transcript below
+ * (and labelled it `local ollama qwen3:4b`) while showing a "Mock" badge - i.e.
+ * the UI silently ignored the real Groq backend. Set `VITE_USE_MOCK=true`
+ * explicitly to run the UI with no backend.
+ */
+export const MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 
 /** Mirrors MODULE_REGISTRY in src/config.py. */
 export const MODULES: Module[] = [

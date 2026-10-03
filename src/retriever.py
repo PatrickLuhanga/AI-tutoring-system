@@ -300,7 +300,15 @@ class Retriever:
                     )
                     result.below_threshold = module_below
             if include_patterns:
-                result.patterns = self._search_patterns(session, vector, module_id)
+                # General (untagged) code patterns are only offered to modules
+                # that actually teach code. Theory modules (RESK301, SPRI301)
+                # must never receive Java error hints, whatever the intent.
+                result.patterns = self._search_patterns(
+                    session,
+                    vector,
+                    module_id,
+                    allow_general=settings.is_coding_module(module_id),
+                )
 
         # Disclosure must describe the chunks that were actually returned, not
         # just the branch that produced them - see sync_third_party_flag.
@@ -372,6 +380,18 @@ class Retriever:
         dropped = 0
         ceiling = policy.max_distance
         for chunk, dist in rows:
+            # Defence in depth: the SQL already filters by module, so a mismatch
+            # here means the filter was bypassed. Drop it rather than leak
+            # another module's material into this module's answer.
+            if chunk.module_id != module_id:
+                logger.error(
+                    "Module isolation violation: chunk %s is module %s but was "
+                    "returned for %s; dropping it.",
+                    chunk.chunk_id,
+                    chunk.module_id,
+                    module_id,
+                )
+                continue
             if ceiling is not None and float(dist) > ceiling:
                 dropped += 1
                 continue
@@ -398,18 +418,33 @@ class Retriever:
                 break
         return chunks, dropped
 
-    def _search_patterns(self, session, vector: list[float], module_id: str) -> list[RetrievedPattern]:
+    def _search_patterns(
+        self,
+        session,
+        vector: list[float],
+        module_id: str,
+        *,
+        allow_general: bool = False,
+    ) -> list[RetrievedPattern]:
+        """Return code-repair patterns for exactly ``module_id``.
+
+        ``allow_general`` only widens the scope to the untagged ("general")
+        patterns *within coding modules*. It is deliberately false for theory
+        modules, so a RESK301/SPRI301 query can never be handed Java error
+        patterns from another module's corpus.
+        """
         distance = CodeRepairPattern.embedding.cosine_distance(vector).label("distance")
-        # Patterns tagged for this module, plus "general" patterns with no tag.
+        if allow_general:
+            scope = or_(
+                CodeRepairPattern.module_id == module_id,
+                CodeRepairPattern.module_id.is_(None),
+            )
+        else:
+            scope = CodeRepairPattern.module_id == module_id
         rows = (
             session.execute(
                 select(CodeRepairPattern, distance)
-                .where(
-                    or_(
-                        CodeRepairPattern.module_id == module_id,
-                        CodeRepairPattern.module_id.is_(None),
-                    )
-                )
+                .where(scope)
                 .order_by(distance)
                 .limit(self.code_top_k)
             )

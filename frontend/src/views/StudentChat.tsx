@@ -81,6 +81,17 @@ export default function StudentChat() {
     [modules, moduleId],
   )
 
+  // The model actually serving this session, taken from the most recent turn's
+  // audit. Shown in the header so the badge reflects reality rather than a
+  // hard-coded "Mock" label.
+  const activeModel = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const llm = messages[i].audit?.llm
+      if (llm) return llm
+    }
+    return null
+  }, [messages])
+
   const refreshSessions = useCallback(async () => {
     try {
       setSessions(await api.listSessions())
@@ -248,7 +259,28 @@ export default function StudentChat() {
           },
         },
       ])
-      void refreshSessions()
+
+      // Show the chat in the sidebar immediately (a brand-new session does not
+      // exist in the list yet), then reconcile with the server so titles,
+      // counts and ordering are authoritative.
+      const nowIso = new Date().toISOString()
+      setSessions((prev) => {
+        if (prev.some((s) => s.session_id === sessionId)) return prev
+        return [
+          {
+            session_id: sessionId,
+            module_id: moduleId,
+            module_name: activeModule?.module_name ?? null,
+            title: text.length > 80 ? `${text.slice(0, 80)}…` : text,
+            started_at: nowIso,
+            last_activity_at: nowIso,
+            turn_count: 1,
+            message_count: 2,
+          },
+          ...prev,
+        ]
+      })
+      await refreshSessions()
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -367,9 +399,20 @@ export default function StudentChat() {
           <div className="mr-auto flex min-w-0 items-center gap-2">
             <GraduationCap className="h-4 w-4 shrink-0 text-blue-600" />
             <h1 className="truncate text-sm font-semibold text-slate-900">Socratic Tutor</h1>
-            {USE_MOCK && (
+            {USE_MOCK ? (
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">
                 Mock
+              </span>
+            ) : activeModel ? (
+              <span
+                title={`${activeModel.provider} · ${activeModel.backend}`}
+                className="max-w-[12rem] truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200"
+              >
+                {activeModel.model}
+              </span>
+            ) : (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-200">
+                live
               </span>
             )}
           </div>

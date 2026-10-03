@@ -350,6 +350,24 @@ class Settings:
                 return folder, candidate
         return None
 
+    #: Languages that are not a programming language. A module whose language is
+    #: one of these (Research Skills, Social and Professional Issues) must never
+    #: be served code-repair patterns.
+    _NON_CODING_LANGUAGES = frozenset({"", "n/a", "na", "none", "null"})
+
+    def is_coding_module(self, module_id: str) -> bool:
+        """True when ``module_id`` is a programming module (Java/Python/...).
+
+        Used to keep the code-repair corpus out of theory modules entirely: a
+        "What is research?" turn in RESK301 must never retrieve Java error
+        patterns, however it was classified.
+        """
+        resolved = self.resolve_any(module_id)
+        if resolved is None:
+            return False
+        language = str(resolved[1].get("language") or "").strip().lower()
+        return language not in self._NON_CODING_LANGUAGES
+
     @property
     def supported_extensions(self) -> set[str]:
         return set(SUPPORTED_TEXT_EXTENSIONS)

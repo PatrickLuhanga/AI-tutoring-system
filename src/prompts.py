@@ -309,6 +309,11 @@ syllabus fact, choose "factual". Only choose a scaffolding label when the studen
 asking how/why something works, or needs help with their own attempt.
 - "other": none of the above.
 
+Hard rule: choose "debugging" ONLY when the message contains an actual error, a stack
+trace, or pasted/described broken code. A plain "What is X?" question - including
+"What is research?" - is "factual" or "conceptual", never "debugging", even when the
+topic is programming. Do not let a topic word trigger the debugging label.
+
 Reply with a single JSON object and nothing else:
 {"intent": "<one of the labels>", "confidence": <0.0-1.0>, "rationale": "<short reason>"}
 """

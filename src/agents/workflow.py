@@ -285,8 +285,13 @@ class TutoringWorkflow:
         This is what lets an abstract question like "why does code reuse matter?"
         find the inheritance slides instead of falling back to memory.
         """
-        include_patterns = intent.label in {"debugging", "problem_solving"} or bool(
-            _CODE_SIGNAL_RE.search(request.message)
+        # Code-repair patterns only ever apply to a programming module. Theory
+        # modules (RESK301, SPRI301) are excluded here as well as in the
+        # retriever, so a misrouted or code-shaped query can never pull Java
+        # hints into a research or social-issues turn.
+        include_patterns = settings.is_coding_module(request.module_id) and (
+            intent.label in {"debugging", "problem_solving"}
+            or bool(_CODE_SIGNAL_RE.search(request.message))
         )
         policy = RetrievalPolicy(
             allow_answers=bool(direct) or stage == "explanation",

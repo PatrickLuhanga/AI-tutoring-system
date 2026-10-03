@@ -74,13 +74,16 @@ _BYPASS_RE = re.compile(
 )
 _DEBUG_RE = re.compile(
     r"(?i)(?:"
-    r"\b(?:error|exception|stack ?trace|traceback|compile|compiler|bug|broken|"
-    r"throws|throw|crash|fails?|why is my|fix my)\b"
-    r"|nullpointer|indexoutofrange"
+    r"\b(?:error|errors|exception|exceptions|stack ?trace|traceback|compile|compiler|"
+    r"bug|bugs|broken|throws|throw|crash|fails?|why is my|fix my)\b"
+    # CamelCase exception/error class names, e.g. NullPointerException. Anchored
+    # to the end of the token so it cannot fire on an unrelated substring.
+    r"|\w*exception\b|\w*error\b"
+    r"|null\s*pointer|index\s*out\s*of\s*range"
     r"|doesn'?t (?:work|compile|run)"
-    r"|not working"
-    r"|never (?:ends|stops|terminates)|infinite loop|won'?t stop|doesn'?t stop"
-    r"|keeps (?:printing|running|looping)"
+    r"|\bnot working\b"
+    r"|\bnever (?:ends|stops|terminates)\b|\binfinite loop\b|\bwon'?t stop\b|\bdoesn'?t stop\b"
+    r"|\bkeeps (?:printing|running|looping)\b"
     r")"
 )
 #: "How do I start / where do I begin" style requests (explicitly scaffolding).
@@ -154,6 +157,19 @@ _CONCEPT_RE = re.compile(
 _CODE_SIGNAL_RE = re.compile(r"```|;\s*$|\{\s*$", re.MULTILINE)
 
 
+def _has_error_signal(text: str) -> bool:
+    """True only when the message carries a genuine error/code signal.
+
+    A "debugging" label is only ever justified by an error token (``error``,
+    ``traceback``, ...), a stack trace or actual pasted code. This is the guard
+    that keeps a plain definitional question - "What is research?" - off the
+    debugging track when the LLM classifier over-triggers on a topic keyword.
+    Matching is word-boundary anchored, so a token like ``search`` can never be
+    found inside ``research`` and ``bug`` never inside ``debugging``.
+    """
+    return bool(_DEBUG_RE.search(text or "") or _CODE_SIGNAL_RE.search(text or ""))
+
+
 class IntentAgent:
     """Classifies the student's request, preferring the LLM with a fallback."""
 
@@ -180,10 +196,31 @@ class IntentAgent:
             try:
                 llm_intent = self._classify_llm(message, module_name, history)
                 if llm_intent is not None:
-                    return llm_intent
+                    return self._reconcile(llm_intent, message)
             except LLMError as exc:
                 logger.warning("Intent LLM unavailable, using heuristics: %s", exc)
         return self._heuristic(message)
+
+    @staticmethod
+    def _reconcile(intent: Intent, message: str) -> Intent:
+        """Veto an LLM "debugging" label that has no error/code evidence.
+
+        Small models over-trigger on topic words; a definitional question such
+        as "What is research?" must never be routed as debugging. When the label
+        is unsupported by any error/code signal, fall back to the deterministic
+        heuristic, which is word-boundary based and routes it to the direct or
+        conceptual track instead.
+        """
+        if intent.label == "debugging" and not _has_error_signal(message):
+            heuristic = IntentAgent._heuristic(message)
+            logger.info(
+                "LLM labelled %r debugging but no error/code signal is present; "
+                "using heuristic label %s instead.",
+                (message or "")[:80],
+                heuristic.label,
+            )
+            return heuristic
+        return intent
 
     # -- LLM classification -------------------------------------------------
     def _few_shots_for(self, module_name: Optional[str]) -> list[dict[str, str]]:

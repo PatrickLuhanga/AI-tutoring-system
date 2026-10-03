@@ -154,27 +154,71 @@ class LLMConfigService:
         return try_decrypt_secret(config.api_key_encrypted)
 
     # -- Writes -------------------------------------------------------------
+    #: ``updated_by`` values that mark a row as system-seeded rather than an
+    #: admin's deliberate runtime choice. Only these rows are reconciled against
+    #: the environment, so we never clobber an admin edit.
+    _SYSTEM_UPDATED_BY = frozenset({None, "", "system-bootstrap", "setup_database", "env-fallback"})
+
+    def _environment_defaults(self) -> dict[str, Any]:
+        return {
+            "provider": settings.default_llm_provider,
+            "ollama_base_url": settings.ollama_base_url,
+            "local_model": settings.default_local_model,
+            "cloud_provider": settings.default_cloud_provider,
+            "cloud_base_url": settings.default_cloud_base_url,
+            "cloud_model": settings.default_cloud_model,
+            "temperature": settings.llm_temperature,
+            "max_tokens": settings.llm_max_tokens,
+            "top_p": settings.llm_top_p,
+            "updated_by": "system-bootstrap",
+        }
+
     def seed_default(self) -> LLMConfig:
-        """Insert the default config if the table is empty (idempotent)."""
+        """Insert the default config, or reconcile a stale system-seeded row.
+
+        Idempotent. A database seeded before the Groq migration holds a row such
+        as ``provider=local, local_model=qwen3:4b``. ``get_active`` would keep
+        serving it forever, so the environment's ``LLM_PROVIDER`` /
+        ``DEFAULT_CLOUD_*`` settings would never take effect. A row that is still
+        system-managed is therefore refreshed to the current environment
+        defaults; a row an admin has edited (``updated_by`` is their email) is
+        left exactly as they set it.
+        """
         self.ensure_table()
         existing = self.get_active()
-        if existing is not None:
-            return existing
-        logger.info("Seeding default LLM configuration (provider=%s)", settings.default_llm_provider)
-        return self.upsert_active(
-            {
-                "provider": settings.default_llm_provider,
-                "ollama_base_url": settings.ollama_base_url,
-                "local_model": settings.default_local_model,
-                "cloud_provider": settings.default_cloud_provider,
-                "cloud_base_url": settings.default_cloud_base_url,
-                "cloud_model": settings.default_cloud_model,
-                "temperature": settings.llm_temperature,
-                "max_tokens": settings.llm_max_tokens,
-                "top_p": settings.llm_top_p,
-                "updated_by": "system-bootstrap",
-            }
-        )
+        if existing is None:
+            logger.info(
+                "Seeding default LLM configuration (provider=%s, cloud=%s)",
+                settings.default_llm_provider,
+                settings.default_cloud_provider,
+            )
+            return self.upsert_active(self._environment_defaults())
+
+        if self._should_reconcile(existing):
+            logger.info(
+                "Reconciling system-seeded LLM configuration %s -> provider=%s cloud=%s model=%s",
+                existing.config_id,
+                settings.default_llm_provider,
+                settings.default_cloud_provider,
+                settings.default_cloud_model,
+            )
+            return self.upsert_active(self._environment_defaults())
+        return existing
+
+    @classmethod
+    def _should_reconcile(cls, config: LLMConfig) -> bool:
+        """True when a system-managed row disagrees with the environment."""
+        if config.updated_by not in cls._SYSTEM_UPDATED_BY:
+            return False
+        if config.provider != settings.default_llm_provider:
+            return True
+        if settings.default_llm_provider == "cloud":
+            return (
+                config.cloud_provider != settings.default_cloud_provider
+                or config.cloud_base_url.rstrip("/") != settings.default_cloud_base_url.rstrip("/")
+                or config.cloud_model != settings.default_cloud_model
+            )
+        return False
 
     def upsert_active(self, payload: dict[str, Any]) -> LLMConfig:
         """Create or update the single active configuration row.
