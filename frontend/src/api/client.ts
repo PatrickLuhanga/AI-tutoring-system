@@ -20,9 +20,7 @@ import type {
 } from '../types'
 import {
   MOCK,
-  MOCK_ANALYTICS,
   MOCK_LLM_CONFIG,
-  MOCK_OLLAMA_MODELS,
   MODULES as MOCK_MODULES,
   mockChatResponse,
 } from './mockData'
@@ -236,19 +234,30 @@ export const api = {
   /** `GET /api/admin/ollama-models` */
   async listOllamaModels(): Promise<OllamaModelsResponse> {
     if (USE_MOCK) {
-      return delay(MOCK_OLLAMA_MODELS, 700)
+      // No fabricated model list offline: report an empty, honest roster.
+      return delay({ base_url: '', count: 0, models: [] }, 200)
     }
     return http<OllamaModelsResponse>('/api/admin/ollama-models')
   },
 
   /**
-   * Telemetry aggregate. There is no dedicated backend route yet — this is the
-   * shape the dashboard expects once one is added (aggregating `telemetry_logs`
-   * and `hint_feedback`).
+   * `GET /api/admin/analytics` - telemetry aggregate for the dashboards.
    */
   async getAnalytics(): Promise<TelemetryAnalytics> {
     if (USE_MOCK) {
-      return delay(MOCK_ANALYTICS, 300)
+      // Zeroed fixture: the dashboard renders an empty state rather than fake
+      // usage numbers that could be mistaken for real telemetry.
+      return delay(
+        {
+          total_sessions: 0,
+          total_hints: 0,
+          satisfaction: { thumbs_up: 0, thumbs_down: 0 },
+          failure_categories: [],
+          by_module: [],
+          average_latency_ms: 0,
+        },
+        150,
+      )
     }
     return http<TelemetryAnalytics>('/api/admin/analytics')
   },

@@ -142,6 +142,41 @@ def _register_error_handlers(app: Flask) -> None:
         return jsonify({"error": "Internal server error."}), 500
 
 
+def _cloud_provider_status(router) -> dict:
+    """Describe the *active* cloud provider, not the unused Ollama path.
+
+    The gateway's generative model runs on a cloud provider (Groq by default).
+    Reporting an Ollama circuit state that nothing is calling was misleading, so
+    this reports what the next turn will actually use, plus whether the keys for
+    it and its OpenRouter fallback are present.
+    """
+    try:
+        described = router.describe_active()
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+    provider = described.get("provider")
+    cloud = described.get("cloud", {}) or {}
+    effective = described.get("effective", {}) or {}
+    status = {
+        "provider": provider,
+        "target": effective.get("target"),
+        "model": effective.get("model"),
+        "has_api_key": bool(cloud.get("has_api_key")),
+        "cloud_provider": cloud.get("provider"),
+    }
+    if provider == "cloud":
+        env_key = router.env_cloud_api_key(cloud.get("provider"))
+        status["has_env_api_key"] = bool(env_key)
+        status["configured"] = bool(cloud.get("has_api_key") or env_key)
+        status["fallback"] = {
+            "provider": "openrouter",
+            "model": settings.backup_cloud_model,
+            "configured": bool(settings.openrouter_api_key),
+        }
+    return status
+
+
 def _register_meta_routes(app: Flask) -> None:
     @app.get("/api/health")
     def health():
@@ -153,29 +188,37 @@ def _register_meta_routes(app: Flask) -> None:
             db_ok, db_info = False, str(exc)
 
         router = app.extensions["llm_router"]
+        cloud_status = _cloud_provider_status(router)
         payload = {
             "status": "ok" if db_ok else "degraded",
             "database": {"ok": db_ok, "info": db_info[:120]},
-            "ollama": {
+            # The active generative provider (Groq) and its fallback, so a
+            # readiness probe reflects the path a student turn actually takes.
+            "llm_provider": cloud_status,
+        }
+
+        # Ollama is only relevant when it is the active provider; keep the block
+        # for a local deployment, but do not imply it is the production path.
+        if cloud_status.get("provider") == "local":
+            payload["ollama"] = {
                 "configured": True,
                 "base_url": settings.ollama_base_url,
                 "circuit": router.ollama_status(),
-            },
-        }
+            }
+            if deep:
+                probe = router.ollama_status(probe=True)
+                payload["ollama"].update(probe)
+                if probe.get("reachable"):
+                    try:
+                        payload["ollama"]["models"] = router.list_ollama_models()
+                    except LLMError as exc:
+                        payload["ollama"]["models"] = []
+                        payload["ollama"]["error"] = str(exc)
+
         try:
             payload["llm"] = router.describe_active()
         except Exception as exc:  # noqa: BLE001
             payload["llm"] = {"error": str(exc)}
-
-        if deep:
-            probe = router.ollama_status(probe=True)
-            payload["ollama"].update(probe)
-            if probe.get("reachable"):
-                try:
-                    payload["ollama"]["models"] = router.list_ollama_models()
-                except LLMError as exc:
-                    payload["ollama"]["models"] = []
-                    payload["ollama"]["error"] = str(exc)
 
         return jsonify(payload), (200 if db_ok else 503)
 
@@ -196,6 +239,41 @@ def _register_meta_routes(app: Flask) -> None:
                 }
             ),
             200,
+        )
+
+
+def _warn_on_missing_api_keys(router) -> None:
+    """Emit one clear warning at boot if the active provider is unusable.
+
+    A missing key used to surface as an opaque 502 on the first student turn.
+    Warning at startup means a misconfigured deployment is visible in the logs
+    before anyone asks a question.
+    """
+    try:
+        described = router.describe_active()
+    except Exception as exc:  # noqa: BLE001 - never block startup
+        logger.warning("Could not determine the active LLM provider at boot: %s", exc)
+        return
+
+    if described.get("provider") != "cloud":
+        return
+
+    cloud = described.get("cloud", {}) or {}
+    provider = cloud.get("provider")
+    has_db_key = bool(cloud.get("has_api_key"))
+    has_env_key = bool(router.env_cloud_api_key(provider))
+    if not (has_db_key or has_env_key):
+        logger.warning(
+            "No API key configured for the active cloud provider %r. Set the "
+            "matching environment key (e.g. GROQ_API_KEY), or POST "
+            "/api/admin/llm-config. Tutor turns will fail until then.",
+            provider,
+        )
+    if not settings.openrouter_api_key:
+        logger.warning(
+            "OPENROUTER_API_KEY is not set; the OpenRouter fallback (%s) is "
+            "disabled. A Groq outage or rate-limit will fail the turn.",
+            settings.backup_cloud_model,
         )
 
 
@@ -228,6 +306,8 @@ def create_app() -> Flask:
             "did you run `python -m src.setup_database`?): %s",
             exc,
         )
+
+    _warn_on_missing_api_keys(router)
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(chat_bp)

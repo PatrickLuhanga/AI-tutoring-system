@@ -1,0 +1,631 @@
+{
+  "schema_version": 1,
+  "source": "AI-generated practice material (Groq). Review before relying on it.",
+  "cleaned_questions": [
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the difference between internal (company-specific) platforms and external (industry-wide) platforms in the context of industrial platforms. Provide examples of each type and discuss their characteristics with respect to new product development and incremental innovation.",
+      "original_prompt": "Explain the difference between internal or company-specific platforms and external or industry-wide platforms in the context of industrial platforms. Provide examples of each type and discuss their characteristics in the context of new product development and incremental innovation.\n###",
+      "difficulty": "medium",
+      "source_label": "AI-generated for revision - not from a past paper",
+      "answer_notes": "Internal or company-specific platforms are designed and developed by a single company to support its own internal processes and products. These platforms are tailored to the specific needs and goals of the company, often integrating with other internal systems and applications. For example, a manufacturing company might develop its own platform for managing and controlling its production processes, integrating with its ERP (Enterprise Resource Planning) system and other internal software. The characteristics of internal platforms include being highly customized, tightly integrated with the company's existing systems, and often proprietary.\n\nExternal or industry-wide platforms, on the other hand, are designed to be used by multiple companies within a specific industry. They provide a common framework and set of tools for managing and controlling industrial operations, often with a focus on interoperability and standardization. For example, a platform like GE Predix or MindSphere is designed to be used by multiple manufacturers and service providers in the industrial sector, enabling them to connect their machines and devices to the platform. The characteristics of external platforms include being more standardized, open, and interoperable, and often being built on top of cloud computing and data analytics services.\n\nIn the context of new product development and incremental innovation, internal platforms are more suited to companies that are already deeply integrated into their own internal systems and processes. External platforms, on the other hand, are better suited for companies that are looking to integrate with other companies in the industry, share data and workflows, or leverage the collective expertise and resources of the industry."
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the concept of an industrial platform and differentiate between internal and external platforms. Discuss the trade-offs involved in designing such platforms, particularly focusing on the stability of the system architecture and the systematic reuse of modular components.",
+      "original_prompt": "Explain the concept of an industrial platform and differentiate between internal and external platforms. Discuss the trade-offs involved in designing such platforms, particularly focusing on the stability of the system architecture and the systematic reuse of modular components.\n###",
+      "difficulty": "medium",
+      "source_label": "AI-generated for revision - not from a past paper",
+      "answer_notes": "An industrial platform is a set of reusable components or technologies that can be used to build a family of related products or new features. There are two types of industrial platforms: internal and external."
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the role of Domain Specific Languages (DSLs) in robotics software development and provide examples of how DSLs are used in the industry. Discuss the key characteristics of DSLs and their benefits in the context of robotics software development.",
+      "original_prompt": "Explain the role of Domain Specific Languages (DSLs) in robotics software development and provide examples of how DSLs are used in the industry. Discuss the key characteristics of DSLs and their benefits in the context of robotics software development.\n**",
+      "difficulty": "medium",
+      "source_label": "AI-generated for revision - not from a past paper",
+      "answer_notes": "**  \nDomain Specific Languages (DSLs) play a significant role in robotics software development by providing specialized syntax and semantics tailored to the specific domain and problem at hand. In the robotics industry, DSLs are used to define and manipulate the complex behaviors and interactions of robotic systems, making the development process more efficient and effective.\n\nKey characteristics of DSLs in robotics include:"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "In robotics, how does a domain‑specific language (DSL) enhance the development process for controlling robot behavior compared to a general‑purpose programming language? Discuss at least two advantages of using a DSL for robotics applications.",
+      "original_prompt": "In the context of robotics, how does a Domain Specific Language (DSL) enhance the development process for controlling robot behavior compared to a general-purpose programming language? Discuss at least two advantages of using a DSL for robotics applications.\n\n**",
+      "difficulty": "medium",
+      "source_label": "AI-generated for revision - not from a past paper",
+      "answer_notes": "**  \nA Domain Specific Language (DSL) in robotics enhances the development process by providing tailored commands and syntax that closely align with the domain-specific knowledge and terminology of the robot's behavior, movement, or communication. This leads to more intuitive and readable code, which is easier for domain experts (such as engineers or technicians) to understand and maintain. Additionally, DSLs can offer higher productivity by allowing developers to focus on the specific requirements of the robot's behavior without being distracted by the complexities of general-purpose programming constructs. For example, a DSL for robot control might include commands like \"moveForward()\" and \"rotateLeft()\", which are more intuitive and easier to use than general-purpose programming constructs like loops and conditionals."
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "In the context of robotics, how do visual programming languages (VPLs) such as Choregraphe, LightRocks, DiaSpec, and Sumsumption differ from traditional programming languages? Provide at least two advantages of using VPLs in robotic programming.",
+      "original_prompt": "In the context of robotics, how do Visual Programming Languages (VPLs) like Choregraphe, LightRocks, DiaSpec, and Sumsumption differ from traditional programming languages? Provide at least two advantages of using VPLs in robotic programming.\n\n**",
+      "difficulty": "medium",
+      "source_label": "AI-generated for revision - not from a past paper",
+      "answer_notes": "**  \nVPLs like Choregraphe, LightRocks, DiaSpec, and Sumsumption differ from traditional programming languages in that they use graphical elements and visual representations to create and manipulate programs, rather than relying on textual code. This visual approach offers several advantages in robotic programming. Firstly, VPLs provide a better visualization and understanding of both the modeling process and the final model, which can be particularly beneficial for complex systems. Secondly, they reduce the cognitive load on developers by allowing them to focus more on the logic and structure of the program rather than syntax and semantics, thereby potentially reducing errors and increasing productivity."
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the concept of internal (company-specific) platforms in the context of industrial innovation. How do they differ from external (industry-wide) platforms? Provide an example of how a company might use internal platforms to meet the needs of different customers.",
+      "original_prompt": "Explain the concept of internal or company-specific platforms in the context of industrial innovation. How do they differ from external or industry-wide platforms? Provide an example of how a company might use internal platforms to meet the needs of different customers.\n###",
+      "difficulty": "medium",
+      "source_label": "AI-generated for revision - not from a past paper",
+      "answer_notes": "Internal or company-specific platforms are designed for a single organization and are used to support the development of new products or services that can be reused across different projects. They are characterized by a stable system architecture and the systematic or planned reuse of modular components. This allows for the development of a family of related products or new features through the deployment of these components.\n\nIn contrast, external or industry-wide platforms are designed for a broader audience and are often used by multiple companies. They are typically used to monitor, control, and analyze industrial operations, handle big data, AI models, and provide insights for various industrial applications. These platforms are often built on top of or embedded within other platforms, and they can be used to enable teamwork, sharing data, workflows, and real-time communication across teams and robots.\n\nFor example, a company might use internal platforms to develop a range of products, such as different types of consumer electronics devices or automobile products. These internal platforms allow the company to create a variety of products that can be customized to meet the needs of different customer segments. In contrast, external platforms might be used to monitor and optimize energy consumption across industrial equipment, providing insights and solutions that can be used by multiple companies in different industries."
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Explain the role of Domain-Specific Languages (DSLs) in robotics, and discuss the challenges associated with their implementation, particularly in the context of industrial constraints. Provide examples of DSLs used in robotics and their benefits.",
+      "original_prompt": "Explain the role of Domain-Specific Languages (DSLs) in robotics, and discuss the challenges associated with their implementation, particularly in the context of industrial constraints. Provide examples of DSLs used in robotics and their benefits.\n###",
+      "difficulty": "medium",
+      "source_label": "AI-generated for revision - not from a past paper",
+      "answer_notes": "Domain-Specific Languages (DSLs) in robotics enable domain experts to write code and express concepts in a way that closely aligns with the requirements and constraints of a particular domain or problem space. In robotics, DSLs are used to define and control the behavior of robots, integrate sensors and vision systems, and manage complex systems such as AGVs and drones.\n\nKey characteristics of DSLs in robotics include:"
+    }
+  ],
+  "generated_mcqs": [
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which statement best describes an internal (company-specific) platform?",
+      "options": [
+        "Designed for use by multiple firms in an industry, emphasizing standardization.",
+        "Tailored to a single company's processes and tightly integrated with its internal systems.",
+        "Open-source and freely available to any organization.",
+        "Primarily focused on providing generic analytics services to external partners."
+      ],
+      "correct_index": 1,
+      "explanation": "Internal platforms are customized for one company's needs and are tightly integrated with its own systems.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the difference between internal (company-specific) platforms and external (industry-wide) platforms in the context of industrial platforms. Provide examples of each type and discuss their characteristics with respect to new product development and incremental innovation.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which of the following is an example of an external (industry-wide) platform?",
+      "options": [
+        "A car manufacturer's proprietary production scheduling system.",
+        "GE Predix industrial IoT platform.",
+        "A retailer's in-house inventory management tool.",
+        "A university's research data repository."
+      ],
+      "correct_index": 1,
+      "explanation": "GE Predix is offered to many manufacturers and service providers, making it an industry-wide platform.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the difference between internal (company-specific) platforms and external (industry-wide) platforms in the context of industrial platforms. Provide examples of each type and discuss their characteristics with respect to new product development and incremental innovation.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "In the context of incremental innovation, internal platforms are most advantageous because they:",
+      "options": [
+        "Allow rapid integration with external partners' data standards.",
+        "Provide standardized APIs across the industry.",
+        "Enable quick modifications aligned with existing internal processes.",
+        "Require no investment in proprietary development."
+      ],
+      "correct_index": 2,
+      "explanation": "Internal platforms can be altered quickly to fit the company's established processes, supporting incremental changes.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the difference between internal (company-specific) platforms and external (industry-wide) platforms in the context of industrial platforms. Provide examples of each type and discuss their characteristics with respect to new product development and incremental innovation.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which characteristic is typical of external platforms?",
+      "options": [
+        "Highly customized to a single firm's workflow.",
+        "Proprietary and closed source.",
+        "Emphasizes interoperability and standard data models.",
+        "Isolated from cloud services."
+      ],
+      "correct_index": 2,
+      "explanation": "External platforms focus on interoperability and use standard data models to serve many firms.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the difference between internal (company-specific) platforms and external (industry-wide) platforms in the context of industrial platforms. Provide examples of each type and discuss their characteristics with respect to new product development and incremental innovation.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "When a company wants to leverage collective industry expertise for a new product, it is more likely to choose:",
+      "options": [
+        "An internal platform built solely for its own use.",
+        "An external platform that supports industry standards.",
+        "A bespoke solution developed from scratch without any platform.",
+        "No platform at all."
+      ],
+      "correct_index": 1,
+      "explanation": "External platforms provide access to shared industry knowledge and standards, aiding collaborative product development.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the difference between internal (company-specific) platforms and external (industry-wide) platforms in the context of industrial platforms. Provide examples of each type and discuss their characteristics with respect to new product development and incremental innovation.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which statement best defines an industrial platform?",
+      "options": [
+        "A set of reusable components or technologies that enable the development of a family of related products.",
+        "A single product sold to end‑users.",
+        "A marketing strategy for branding.",
+        "A temporary project management tool."
+      ],
+      "correct_index": 0,
+      "explanation": "An industrial platform is precisely a collection of reusable components or technologies used to build related products.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the concept of an industrial platform and differentiate between internal and external platforms. Discuss the trade-offs involved in designing such platforms, particularly focusing on the stability of the system architecture and the systematic reuse of modular components.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which characteristic distinguishes an internal industrial platform from an external one?",
+      "options": [
+        "Internal platforms are owned and used only within the same organization, whereas external platforms are offered to third‑party developers.",
+        "Internal platforms are open‑source, external platforms are proprietary.",
+        "Internal platforms are cheaper to maintain than external platforms.",
+        "Internal platforms require no documentation."
+      ],
+      "correct_index": 0,
+      "explanation": "Internal platforms stay within the organization, while external platforms are made available to outside developers.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the concept of an industrial platform and differentiate between internal and external platforms. Discuss the trade-offs involved in designing such platforms, particularly focusing on the stability of the system architecture and the systematic reuse of modular components.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "A key trade‑off when designing an industrial platform is between:",
+      "options": [
+        "Architectural stability and flexibility for component reuse.",
+        "Color scheme and user interface speed.",
+        "Number of developers and office location.",
+        "Marketing budget and sales volume."
+      ],
+      "correct_index": 0,
+      "explanation": "Designers must balance a stable architecture with the flexibility needed for systematic component reuse.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the concept of an industrial platform and differentiate between internal and external platforms. Discuss the trade-offs involved in designing such platforms, particularly focusing on the stability of the system architecture and the systematic reuse of modular components.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which design choice most improves systematic reuse of modular components?",
+      "options": [
+        "Defining clear, versioned interfaces for each module.",
+        "Hard‑coding component dependencies.",
+        "Using a monolithic codebase without abstraction.",
+        "Frequently changing module names."
+      ],
+      "correct_index": 0,
+      "explanation": "Clear, versioned interfaces allow modules to be reused reliably across the platform.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the concept of an industrial platform and differentiate between internal and external platforms. Discuss the trade-offs involved in designing such platforms, particularly focusing on the stability of the system architecture and the systematic reuse of modular components.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "When prioritising system‑architecture stability, a platform is likely to:",
+      "options": [
+        "Restrict the introduction of new component versions to maintain compatibility.",
+        "Allow any component to be swapped without testing.",
+        "Ignore backward compatibility.",
+        "Encourage frequent breaking changes."
+      ],
+      "correct_index": 0,
+      "explanation": "Stability is maintained by limiting changes that could break existing component interactions.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the concept of an industrial platform and differentiate between internal and external platforms. Discuss the trade-offs involved in designing such platforms, particularly focusing on the stability of the system architecture and the systematic reuse of modular components.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "What is the primary advantage of using a DSL in robotics compared to a general‑purpose programming language?",
+      "options": [
+        "It provides abstractions that are directly aligned with robot tasks",
+        "It guarantees faster execution speed on embedded hardware",
+        "It includes built‑in AI algorithms for perception",
+        "It automatically generates hardware schematics"
+      ],
+      "correct_index": 0,
+      "explanation": "A DSL offers domain‑specific abstractions that match robot tasks, making development clearer and less error‑prone.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the role of Domain Specific Languages (DSLs) in robotics software development and provide examples of how DSLs are used in the industry. Discuss the key characteristics of DSLs and their benefits in the context of robotics software development.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which of the following is an example of a DSL used for describing a robot’s physical structure?",
+      "options": [
+        "ROS (Robot Operating System)",
+        "URDF (Unified Robot Description Format)",
+        "MoveIt! scripting language",
+        "Python"
+      ],
+      "correct_index": 1,
+      "explanation": "URDF is a textual DSL that encodes a robot’s kinematic and visual description.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the role of Domain Specific Languages (DSLs) in robotics software development and provide examples of how DSLs are used in the industry. Discuss the key characteristics of DSLs and their benefits in the context of robotics software development.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "In a DSL for robot behavior, which language characteristic helps ensure that only valid robot commands can be expressed?",
+      "options": [
+        "Turing completeness",
+        "Strong static typing",
+        "Dynamic memory allocation",
+        "Garbage collection"
+      ],
+      "correct_index": 1,
+      "explanation": "Strong static typing allows the DSL to reject ill‑formed commands at compile time.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the role of Domain Specific Languages (DSLs) in robotics software development and provide examples of how DSLs are used in the industry. Discuss the key characteristics of DSLs and their benefits in the context of robotics software development.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which benefit of DSLs most directly reduces integration errors when multiple robots share a common software stack?",
+      "options": [
+        "Improved runtime performance",
+        "Domain‑specific validation of models and commands",
+        "A larger standard library of functions",
+        "Cross‑platform portability"
+      ],
+      "correct_index": 1,
+      "explanation": "Domain‑specific validation catches mismatches early, preventing integration problems across robots.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the role of Domain Specific Languages (DSLs) in robotics software development and provide examples of how DSLs are used in the industry. Discuss the key characteristics of DSLs and their benefits in the context of robotics software development.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "A textual language that describes robot kinematics, such as a file format for joint chains, is an example of which type of DSL?",
+      "options": [
+        "External DSL",
+        "Internal DSL",
+        "Visual DSL",
+        "Data‑flow DSL"
+      ],
+      "correct_index": 0,
+      "explanation": "An external DSL is a stand‑alone language (e.g., a file format) separate from a host programming language.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the role of Domain Specific Languages (DSLs) in robotics software development and provide examples of how DSLs are used in the industry. Discuss the key characteristics of DSLs and their benefits in the context of robotics software development.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which of the following is a primary advantage of using a DSL for robot control over a general‑purpose language?",
+      "options": [
+        "Tailored syntax that matches robot domain concepts",
+        "Faster execution speed",
+        "Automatic hardware abstraction",
+        "Built‑in AI capabilities"
+      ],
+      "correct_index": 0,
+      "explanation": "A DSL provides syntax that directly reflects domain concepts, making code more intuitive for robot developers.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "In robotics, how does a domain‑specific language (DSL) enhance the development process for controlling robot behavior compared to a general‑purpose programming language? Discuss at least two advantages of using a DSL for robotics applications.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "A DSL for robot movement typically includes commands such as \"moveForward()\" and \"rotateLeft()\". What benefit does this provide to domain experts?",
+      "options": [
+        "Reduces need for debugging",
+        "Enables parallel processing",
+        "Improves readability and reduces learning curve",
+        "Guarantees real‑time performance"
+      ],
+      "correct_index": 2,
+      "explanation": "Domain‑specific commands are easier to read and understand, lowering the learning barrier for engineers and technicians.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "In robotics, how does a domain‑specific language (DSL) enhance the development process for controlling robot behavior compared to a general‑purpose programming language? Discuss at least two advantages of using a DSL for robotics applications.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "How does a DSL contribute to productivity in robotics development?",
+      "options": [
+        "By eliminating the need for any testing",
+        "By allowing developers to focus on domain logic rather than low‑level programming constructs",
+        "By providing built‑in simulation environments",
+        "By automatically generating hardware schematics"
+      ],
+      "correct_index": 1,
+      "explanation": "A DSL abstracts low‑level details so developers can concentrate on the robot’s behavior, speeding up development.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "In robotics, how does a domain‑specific language (DSL) enhance the development process for controlling robot behavior compared to a general‑purpose programming language? Discuss at least two advantages of using a DSL for robotics applications.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which statement best describes a limitation of using a DSL compared with a general‑purpose language?",
+      "options": [
+        "DSLs cannot be extended with libraries",
+        "DSLs are always slower at runtime",
+        "DSLs may have limited expressiveness outside their domain",
+        "DSLs require more memory"
+      ],
+      "correct_index": 2,
+      "explanation": "DSLs are specialized, so they often cannot express concepts unrelated to their target domain.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "In robotics, how does a domain‑specific language (DSL) enhance the development process for controlling robot behavior compared to a general‑purpose programming language? Discuss at least two advantages of using a DSL for robotics applications.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "In a robotics project, a team adopts a DSL for high‑level behavior specification. Which outcome is most likely?",
+      "options": [
+        "The robot will operate without any need for low‑level drivers",
+        "Domain experts can directly modify behavior scripts",
+        "The code will be portable across all robot platforms without changes",
+        "Development time will increase due to learning a new language"
+      ],
+      "correct_index": 1,
+      "explanation": "A high‑level DSL enables domain experts to edit behavior directly without deep programming knowledge.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "In robotics, how does a domain‑specific language (DSL) enhance the development process for controlling robot behavior compared to a general‑purpose programming language? Discuss at least two advantages of using a DSL for robotics applications.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which of the following best describes a primary distinction between visual programming languages (VPLs) and traditional textual programming languages in robotics?",
+      "options": [
+        "VPLs use graphical blocks to represent program logic, while traditional languages rely on text code.",
+        "VPLs execute faster than textual languages.",
+        "VPLs require no hardware interface.",
+        "VPLs cannot be used for real-time control."
+      ],
+      "correct_index": 0,
+      "explanation": "VPLs represent program constructs with visual blocks, whereas traditional languages are written as text.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "In the context of robotics, how do visual programming languages (VPLs) such as Choregraphe, LightRocks, DiaSpec, and Sumsumption differ from traditional programming languages? Provide at least two advantages of using VPLs in robotic programming.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which advantage is most directly associated with the use of VPLs for novice robotic developers?",
+      "options": [
+        "Reduced need to understand underlying hardware drivers.",
+        "Automatic generation of optimized low‑level code.",
+        "Improved visualization of program flow, lowering cognitive load.",
+        "Ability to compile to any target platform without modification."
+      ],
+      "correct_index": 2,
+      "explanation": "Graphical visualization helps beginners grasp program flow and reduces cognitive load.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "In the context of robotics, how do visual programming languages (VPLs) such as Choregraphe, LightRocks, DiaSpec, and Sumsumption differ from traditional programming languages? Provide at least two advantages of using VPLs in robotic programming.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "In a robotics project, a team chooses a VPL to improve collaboration among multidisciplinary members. Which benefit supports this decision?",
+      "options": [
+        "VPLs enforce strict type safety at compile time.",
+        "Graphical models are easier for non‑programmers to read and modify.",
+        "VPLs guarantee deterministic execution times.",
+        "VPLs eliminate the need for version control."
+      ],
+      "correct_index": 1,
+      "explanation": "Visual models are more accessible to engineers without deep programming expertise, facilitating collaboration.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "In the context of robotics, how do visual programming languages (VPLs) such as Choregraphe, LightRocks, DiaSpec, and Sumsumption differ from traditional programming languages? Provide at least two advantages of using VPLs in robotic programming.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which of the following is a limitation commonly associated with VPLs compared with traditional textual languages?",
+      "options": [
+        "Higher abstraction can obscure low‑level performance details.",
+        "VPLs cannot be integrated with ROS.",
+        "VPLs lack any debugging tools.",
+        "VPLs are incompatible with simulation environments."
+      ],
+      "correct_index": 0,
+      "explanation": "The abstraction level of VPLs can hide details about performance and resource usage.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "In the context of robotics, how do visual programming languages (VPLs) such as Choregraphe, LightRocks, DiaSpec, and Sumsumption differ from traditional programming languages? Provide at least two advantages of using VPLs in robotic programming.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "When evaluating the productivity impact of VPLs in robotic programming, which metric is most likely to show improvement?",
+      "options": [
+        "Number of lines of code written per hour.",
+        "Frequency of syntax errors during development.",
+        "Memory footprint of the final binary.",
+        "Execution latency of control loops."
+      ],
+      "correct_index": 1,
+      "explanation": "Visual environments reduce syntax errors because code is assembled from predefined blocks rather than typed manually.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "In the context of robotics, how do visual programming languages (VPLs) such as Choregraphe, LightRocks, DiaSpec, and Sumsumption differ from traditional programming languages? Provide at least two advantages of using VPLs in robotic programming.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which of the following best describes an internal (company-specific) platform?",
+      "options": [
+        "A reusable software framework owned and maintained by a single organization for its own product development.",
+        "An open-source cloud service available to any company.",
+        "A marketplace for third‑party developers to sell apps.",
+        "A public data‑analytics platform used by multiple industries."
+      ],
+      "correct_index": 0,
+      "explanation": "An internal platform is a reusable framework that a single company creates and controls for its own product development.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the concept of internal (company-specific) platforms in the context of industrial innovation. How do they differ from external (industry-wide) platforms? Provide an example of how a company might use internal platforms to meet the needs of different customers.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "A key advantage of internal platforms over external platforms is:",
+      "options": [
+        "Ability to tailor components to the company's specific product families.",
+        "Access to a larger pool of external users.",
+        "Lower initial development cost due to shared ownership.",
+        "Automatic compliance with all industry standards."
+      ],
+      "correct_index": 0,
+      "explanation": "Internal platforms can be customized to match the company's own product lines, giving a strategic advantage.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the concept of internal (company-specific) platforms in the context of industrial innovation. How do they differ from external (industry-wide) platforms? Provide an example of how a company might use internal platforms to meet the needs of different customers.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which scenario illustrates the use of an external (industry-wide) platform?",
+      "options": [
+        "A car manufacturer reusing its chassis design across several models.",
+        "A robotics firm using a cloud‑based analytics service that aggregates data from many factories.",
+        "A smartphone company developing its own UI toolkit.",
+        "An electronics firm creating a proprietary sensor library."
+      ],
+      "correct_index": 1,
+      "explanation": "A cloud‑based analytics service used by many factories is an industry‑wide platform serving multiple companies.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the concept of internal (company-specific) platforms in the context of industrial innovation. How do they differ from external (industry-wide) platforms? Provide an example of how a company might use internal platforms to meet the needs of different customers.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "In the context of platform reuse, systematic reuse of modular components most directly supports:",
+      "options": [
+        "Rapid creation of a family of related products.",
+        "Reducing the number of external partners.",
+        "Increasing the price of each individual product.",
+        "Eliminating the need for any documentation."
+      ],
+      "correct_index": 0,
+      "explanation": "Reusing modular components enables quick development of a family of related products.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the concept of internal (company-specific) platforms in the context of industrial innovation. How do they differ from external (industry-wide) platforms? Provide an example of how a company might use internal platforms to meet the needs of different customers.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which of the following is NOT a typical characteristic of an external platform?",
+      "options": [
+        "Designed for use by multiple organizations.",
+        "Provides real‑time communication across teams and robots.",
+        "Stable system architecture owned by a single company for internal projects.",
+        "Enables sharing of big‑data analytics across industries."
+      ],
+      "correct_index": 2,
+      "explanation": "External platforms are not owned by a single company for internal projects; that describes internal platforms.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the concept of internal (company-specific) platforms in the context of industrial innovation. How do they differ from external (industry-wide) platforms? Provide an example of how a company might use internal platforms to meet the needs of different customers.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "What is the primary advantage of using a DSL in robotics?",
+      "options": [
+        "Faster execution speed",
+        "Allows domain experts to express concepts directly",
+        "Reduces hardware cost",
+        "Guarantees safety certification"
+      ],
+      "correct_index": 1,
+      "explanation": "DSLs let domain experts write code using terminology and abstractions familiar to their field, reducing the gap between problem description and implementation.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the role of Domain-Specific Languages (DSLs) in robotics, and discuss the challenges associated with their implementation, particularly in the context of industrial constraints. Provide examples of DSLs used in robotics and their benefits.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which of the following is an example of a DSL used for robot motion planning?",
+      "options": [
+        "ROS (Robot Operating System)",
+        "URScript",
+        "Python",
+        "C++"
+      ],
+      "correct_index": 1,
+      "explanation": "URScript is a dedicated scripting language for Universal Robots that describes robot trajectories and motions at a high level.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the role of Domain-Specific Languages (DSLs) in robotics, and discuss the challenges associated with their implementation, particularly in the context of industrial constraints. Provide examples of DSLs used in robotics and their benefits.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "A major challenge when implementing DSLs in industrial robotics is:",
+      "options": [
+        "Lack of expressive power compared to general‑purpose languages",
+        "Excessive runtime overhead",
+        "Difficulty integrating with legacy control systems",
+        "Inability to model sensor data"
+      ],
+      "correct_index": 2,
+      "explanation": "Industrial plants often contain legacy controllers and PLCs; ensuring a new DSL can interoperate with these existing systems is a key difficulty.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the role of Domain-Specific Languages (DSLs) in robotics, and discuss the challenges associated with their implementation, particularly in the context of industrial constraints. Provide examples of DSLs used in robotics and their benefits.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "In the context of Automated Guided Vehicles (AGVs), a DSL typically abstracts:",
+      "options": [
+        "Low‑level motor currents",
+        "High‑level task sequencing",
+        "Network packet routing",
+        "Power supply management"
+      ],
+      "correct_index": 1,
+      "explanation": "AGV DSLs focus on describing routes, tasks, and coordination rather than the low‑level hardware details.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the role of Domain-Specific Languages (DSLs) in robotics, and discuss the challenges associated with their implementation, particularly in the context of industrial constraints. Provide examples of DSLs used in robotics and their benefits.",
+      "model": "openai/gpt-oss-120b"
+    },
+    {
+      "module_id": "PBDV301",
+      "prompt": "Which benefit is most directly associated with using a DSL for robot vision integration?",
+      "options": [
+        "Improved frame rate",
+        "Simplified configuration of camera pipelines",
+        "Reduced memory footprint",
+        "Automatic path planning"
+      ],
+      "correct_index": 1,
+      "explanation": "Vision‑specific DSLs let engineers declaratively specify image processing steps, making pipeline setup easier and less error‑prone.",
+      "difficulty": "medium",
+      "topic": "AI-generated for revision - not from a past paper",
+      "based_on": "Explain the role of Domain-Specific Languages (DSLs) in robotics, and discuss the challenges associated with their implementation, particularly in the context of industrial constraints. Provide examples of DSLs used in robotics and their benefits.",
+      "model": "openai/gpt-oss-120b"
+    }
+  ],
+  "counts": {
+    "cleaned": 7,
+    "generated_mcqs": 35,
+    "by_module": {
+      "PBDV301": 35
+    }
+  }
+}

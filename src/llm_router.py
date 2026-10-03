@@ -531,6 +531,24 @@ class LLMRouter:
 
     # -- Cloud --------------------------------------------------------------
     @staticmethod
+    def env_api_key_for_provider(provider: Optional[str]) -> Optional[str]:
+        """Return the environment API key for a cloud provider name, if any.
+
+        Public so the gateway's health probe can report whether the active
+        provider is actually configured without reaching into private state.
+        """
+        name = (provider or "").lower()
+        if name == "groq":
+            return settings.groq_api_key or None
+        if name in {"openai", "openai_compatible", "azure_openai"}:
+            return os.getenv("OPENAI_API_KEY") or None
+        return None
+
+    def env_cloud_api_key(self, provider: Optional[str] = None) -> Optional[str]:
+        """Environment key for the active (or named) cloud provider."""
+        return self.env_api_key_for_provider(provider)
+
+    @staticmethod
     def _env_cloud_api_key(config: LLMConfig) -> Optional[str]:
         """Fall back to the process environment when no key is stored in the DB.
 
@@ -540,11 +558,7 @@ class LLMRouter:
         through the admin API is still preferred, because the stored value is
         read first.
         """
-        if config.cloud_provider == "groq":
-            return settings.groq_api_key or None
-        if config.cloud_provider in {"openai", "openai_compatible", "azure_openai"}:
-            return os.getenv("OPENAI_API_KEY") or None
-        return None
+        return LLMRouter.env_api_key_for_provider(config.cloud_provider)
 
     def _generate_cloud(
         self,
@@ -567,12 +581,131 @@ class LLMRouter:
                 config, messages, api_key, temperature, max_tokens
             )
         else:
-            text, backend = self._generate_openai(
-                config, messages, api_key, temperature, max_tokens, json_mode
-            )
+            try:
+                text, backend = self._generate_openai(
+                    config, messages, api_key, temperature, max_tokens, json_mode
+                )
+            except LLMError as primary_exc:
+                # Groq (or any OpenAI-compatible primary) is down or throttling.
+                # Try the OpenRouter backup model before giving up on the turn.
+                fallback = self._generate_openrouter_fallback(
+                    messages, temperature, max_tokens, json_mode, primary_exc
+                )
+                if fallback is None:
+                    raise
+                text, backend = fallback
         # A reasoning model served through an OpenAI-compatible endpoint (e.g.
         # deepseek-r1) can inline its chain of thought the same way Ollama does.
         return strip_reasoning(text), backend
+
+    #: HTTP statuses that warrant a retry on the primary provider.
+    _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+    _MAX_ATTEMPTS = 3
+
+    @classmethod
+    def _retriable(cls, exc: Exception) -> bool:
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", None)
+        return status in cls._RETRY_STATUSES
+
+    def _post_with_retry(
+        self,
+        url: str,
+        *,
+        body: dict[str, Any],
+        headers: dict[str, str],
+        context: str,
+    ) -> dict[str, Any]:
+        """POST to an OpenAI-compatible endpoint, retrying 429/5xx up to 3 times.
+
+        Connection errors are also retried, since a transient network blip is
+        indistinguishable from a provider outage to the caller. Any other 4xx
+        (a bad model name, an auth failure) is raised immediately - retrying it
+        would only waste time and quota.
+        """
+        last_exc: Optional[Exception] = None
+        for attempt in range(1, self._MAX_ATTEMPTS + 1):
+            try:
+                response = self._session.post(
+                    url, json=body, headers=headers, timeout=settings.llm_request_timeout
+                )
+                response.raise_for_status()
+                return response.json() or {}
+            except requests.RequestException as exc:
+                last_exc = exc
+                if not self._retriable(exc):
+                    detail = getattr(getattr(exc, "response", None), "text", "")
+                    raise LLMError(
+                        f"{context} request to {url} failed: {exc} {str(detail)[:300]}"
+                    ) from exc
+                if attempt >= self._MAX_ATTEMPTS:
+                    break
+                backoff = min(2 ** (attempt - 1), 4)
+                logger.warning(
+                    "%s call to %s failed (attempt %d/%d): %s; retrying in %ds",
+                    context, url, attempt, self._MAX_ATTEMPTS, exc, backoff,
+                )
+                time.sleep(backoff)
+        detail = getattr(getattr(last_exc, "response", None), "text", "")
+        raise LLMError(
+            f"{context} request to {url} failed after {self._MAX_ATTEMPTS} attempts: "
+            f"{last_exc} {str(detail)[:300]}"
+        ) from last_exc
+
+    def _generate_openrouter_fallback(
+        self,
+        messages: Sequence[dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        json_mode: bool,
+        primary_exc: LLMError,
+    ) -> Optional[tuple[str, str]]:
+        """Second provider (OpenRouter) used when the primary cloud model fails.
+
+        Returns ``None`` (so the caller re-raises the original error) when no
+        OpenRouter key is configured - an unconfigured fallback is not an error
+        in itself, it just means the primary's failure is the real one.
+        """
+        api_key = settings.openrouter_api_key
+        if not api_key:
+            logger.warning(
+                "Primary cloud provider failed (%s) and no OPENROUTER_API_KEY is "
+                "set, so no fallback is available.",
+                primary_exc,
+            )
+            return None
+
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        body: dict[str, Any] = {
+            "model": settings.backup_cloud_model,
+            "messages": list(messages),
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
+
+        logger.warning(
+            "Primary cloud provider failed (%s); falling back to OpenRouter model %s",
+            primary_exc,
+            settings.backup_cloud_model,
+        )
+        try:
+            data = self._post_with_retry(
+                url, body=body, headers=headers, context="OpenRouter fallback"
+            )
+            text = data["choices"][0]["message"]["content"]
+        except (LLMError, KeyError, IndexError, TypeError) as exc:
+            logger.error("OpenRouter fallback also failed: %s", exc)
+            return None
+        if not text:
+            logger.error("OpenRouter fallback returned an empty response.")
+            return None
+        return text, "openrouter"
 
     def _generate_openai(
         self,
@@ -605,16 +738,12 @@ class LLMRouter:
         # practice generator, the intent classifier - far more reliable.
         if json_mode:
             body["response_format"] = {"type": "json_object"}
-        try:
-            response = self._session.post(
-                url, json=body, headers=headers, timeout=settings.llm_request_timeout
-            )
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            detail = getattr(getattr(exc, "response", None), "text", "")
-            raise LLMError(f"Cloud provider request to {url} failed: {exc} {detail[:300]}") from exc
 
-        data = response.json() or {}
+        # Retry 429/5xx up to 3 attempts before the caller falls back to
+        # OpenRouter (see _generate_cloud).
+        data = self._post_with_retry(
+            url, body=body, headers=headers, context=config.cloud_provider
+        )
         try:
             text = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:

@@ -222,6 +222,10 @@ class Settings:
     #: used without first persisting the key through the admin API. The encrypted
     #: DB value still takes precedence when an admin has rotated it at runtime.
     groq_api_key: str
+    #: Model used by the OpenRouter fallback when Groq is unavailable.
+    backup_cloud_model: str
+    #: API key for OpenRouter. Empty disables the fallback.
+    openrouter_api_key: str
     llm_request_timeout: int
     llm_temperature: float
     llm_max_tokens: int
@@ -429,8 +433,10 @@ def _build_settings() -> Settings:
         default_local_model=_str("DEFAULT_LOCAL_MODEL", "qwen2.5:3b-instruct"),
         default_cloud_provider=_str("DEFAULT_CLOUD_PROVIDER", "groq").lower(),
         default_cloud_base_url=_str("DEFAULT_CLOUD_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/"),
-        default_cloud_model=_str("DEFAULT_CLOUD_MODEL", "llama-3.1-8b-instant"),
+        default_cloud_model=_str("DEFAULT_CLOUD_MODEL", "openai/gpt-oss-120b"),
         groq_api_key=_str("GROQ_API_KEY", ""),
+        backup_cloud_model=_str("BACKUP_CLOUD_MODEL", "meta-llama/llama-3.3-70b-instruct:free"),
+        openrouter_api_key=_str("OPENROUTER_API_KEY", ""),
         llm_request_timeout=_int("LLM_REQUEST_TIMEOUT", 120),
         llm_temperature=_float("LLM_TEMPERATURE", 0.4),
         llm_max_tokens=_int("LLM_MAX_TOKENS", 1024),

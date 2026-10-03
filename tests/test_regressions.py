@@ -126,3 +126,117 @@ def test_pattern_search_is_module_scoped_for_theory_modules():
     coding = _CapturingSession()
     retriever._search_patterns(coding, [0.0] * 8, "IPRT301", allow_general=True)
     assert " IS NULL" in str(coding.statements[-1]).upper()
+
+
+# ---------------------------------------------------------------------------
+# Cloud resilience - retry + OpenRouter fallback
+# ---------------------------------------------------------------------------
+class _FakeResponse:
+    def __init__(self, status_code: int, payload: dict | None = None, text: str = "") -> None:
+        self.status_code = status_code
+        self._payload = payload or {}
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            import requests
+
+            raise requests.HTTPError(f"{self.status_code}", response=self)
+
+    def json(self) -> dict:
+        return self._payload
+
+
+class _RecordingSession:
+    """Returns scripted responses in order and records every call."""
+
+    def __init__(self, responses: list) -> None:
+        self._responses = list(responses)
+        self.calls: list[dict] = []
+
+    def post(self, url, *, json=None, headers=None, timeout=None):
+        self.calls.append({"url": url, "json": json, "headers": headers})
+        return self._responses.pop(0)
+
+
+def test_post_with_retry_retries_429_then_succeeds(monkeypatch):
+    from src.llm_router import LLMRouter
+
+    router = LLMRouter()
+    router._session = _RecordingSession([
+        _FakeResponse(429),
+        _FakeResponse(429),
+        _FakeResponse(200, {"choices": [{"message": {"content": "ok"}}]}),
+    ])
+    monkeypatch.setattr("src.llm_router.time.sleep", lambda *_: None)
+
+    data = router._post_with_retry(
+        "https://example.test/x", body={"m": 1}, headers={}, context="test"
+    )
+    assert data["choices"][0]["message"]["content"] == "ok"
+    assert len(router._session.calls) == 3
+
+
+def test_post_with_retry_does_not_retry_4xx(monkeypatch):
+    import pytest
+
+    from src.llm_router import LLMError, LLMRouter
+
+    router = LLMRouter()
+    router._session = _RecordingSession([_FakeResponse(404, text="no model")])
+    monkeypatch.setattr("src.llm_router.time.sleep", lambda *_: None)
+
+    with pytest.raises(LLMError):
+        router._post_with_retry(
+            "https://example.test/x", body={}, headers={}, context="test"
+        )
+    assert len(router._session.calls) == 1
+
+
+def test_openrouter_fallback_used_when_groq_exhausted(monkeypatch):
+    from src.llm_router import LLMError, LLMRouter
+    from src.models import LLMConfig
+
+    router = LLMRouter()
+    # Primary Groq: always 503, so the retry helper gives up and raises LLMError.
+    # Fallback OpenRouter: succeeds.
+    router._session = _RecordingSession(
+        [_FakeResponse(503)] * LLMRouter._MAX_ATTEMPTS
+        + [_FakeResponse(200, {"choices": [{"message": {"content": "backup reply"}}]})]
+    )
+    monkeypatch.setattr("src.llm_router.time.sleep", lambda *_: None)
+    monkeypatch.setattr("src.llm_router.settings", _Settings(openrouter_api_key="or-key"))
+
+    config = LLMConfig(
+        config_id=1,
+        name="default",
+        is_active=True,
+        provider="cloud",
+        ollama_base_url="http://localhost:11434",
+        local_model="qwen2.5:3b-instruct",
+        cloud_provider="groq",
+        cloud_base_url="https://api.groq.com/openai/v1",
+        cloud_model="openai/gpt-oss-120b",
+        temperature=0.2,
+        max_tokens=64,
+        top_p=0.9,
+        extra={},
+        updated_by="test",
+    )
+    # Skip DB lookups for the key: return a placeholder so _generate_cloud runs.
+    monkeypatch.setattr(router.config_service, "get_api_key", lambda c: "groq-key")
+
+    text, backend = router._generate_cloud(
+        config, [{"role": "user", "content": "hi"}], 0.2, 64
+    )
+    assert text == "backup reply"
+    assert backend == "openrouter"
+
+
+class _Settings:
+    """Minimal stand-in for the frozen settings object."""
+
+    def __init__(self, **kwargs) -> None:
+        self.openrouter_api_key = kwargs.get("openrouter_api_key", "")
+        self.backup_cloud_model = "meta-llama/llama-3.3-70b-instruct:free"
+        self.llm_request_timeout = 120

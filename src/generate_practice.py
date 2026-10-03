@@ -212,8 +212,14 @@ def generate_for_question(
     router,
     cleaned_out: list[dict],
     generated_out: list[GeneratedQuestion],
+    per_question: int = 3,
 ) -> tuple[Optional[str], list[GeneratedQuestion]]:
-    """Clean one question and generate three MCQs. Returns ``(cleaned, mcqs)``."""
+    """Clean one question and generate ``per_question`` MCQs.
+
+    Returns ``(cleaned, mcqs)``. ``per_question`` defaults to 3; a module whose
+    source bank is thin (PBDV301 has 8 questions) can ask for more so the module
+    reaches a usable bank size.
+    """
     from .llm_router import LLMError
 
     user_prompt = (
@@ -222,14 +228,22 @@ def generate_for_question(
         f"Existing reference answer (may be empty): {question.answer_notes or 'none'}\n\n"
         f"Messy past-paper question:\n{question.prompt}"
     )
+    # The system prompt is fixed at "three"; when a caller wants more, say so
+    # explicitly rather than silently truncating its output.
+    system = _SYSTEM
+    if per_question != 3:
+        system = _SYSTEM.replace(
+            "Write THREE brand new", f"Write {per_question} brand new"
+        ).replace('"mcqs": [', '"mcqs": [')
+
     try:
         response = router.generate(
             messages=[
-                {"role": "system", "content": _SYSTEM},
+                {"role": "system", "content": system},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.3,
-            max_tokens=1200,
+            max_tokens=1200 + max(0, per_question - 3) * 300,
             json_mode=True,
         )
     except LLMError as exc:
@@ -257,7 +271,7 @@ def generate_for_question(
             continue
         mcq.based_on = cleaned
         mcqs.append(mcq)
-        if len(mcqs) >= 3:
+        if len(mcqs) >= per_question:
             break
 
     # Record the cleaned prompt alongside its source so the transformation is
@@ -344,6 +358,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--module", default=None, help="restrict to one module_id, e.g. RESK301")
     parser.add_argument("--limit", type=int, default=5, help="how many source questions to process")
     parser.add_argument("--all", action="store_true", help="process the whole bank (ignores --limit)")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="process every selected question even if it does not look messy "
+             "(needed for a module whose source bank is already clean, e.g. PBDV301)",
+    )
+    parser.add_argument(
+        "--per-question",
+        type=int,
+        default=3,
+        help="MCQs to request per source question (default 3)",
+    )
     parser.add_argument("--in-db", action="store_true", help="also insert the MCQs into the questions table")
     parser.add_argument("--dry-run", action="store_true", help="print the plan without calling the model")
     args = parser.parse_args(argv)
@@ -361,10 +387,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         bank = [q for q in bank if q.module_id.upper() == wanted]
 
     messy = [q for q in bank if _looks_messy(q)]
-    selected = messy if args.all else messy[: max(1, args.limit)]
+    pool = bank if args.force else messy
+    selected = pool if args.all else pool[: max(1, args.limit)]
 
     print(f"Loaded {len(bank)} question(s) from {args.bank}")
-    print(f"{len(messy)} look OCR/footer-messy; processing {len(selected)}")
+    if args.force:
+        print(f"--force: processing from all {len(bank)} (messy filter bypassed)")
+    else:
+        print(f"{len(messy)} look OCR/footer-messy")
+    print(f"processing {len(selected)}, {args.per_question} MCQ(s) each")
 
     if args.dry_run:
         for q in selected:
@@ -391,7 +422,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     for i, question in enumerate(selected, start=1):
         print(f"  [{i}/{len(selected)}] {question.module_id}: {question.prompt[:70]}")
         _, produced = generate_for_question(
-            question, router=router, cleaned_out=cleaned, generated_out=mcqs
+            question,
+            router=router,
+            cleaned_out=cleaned,
+            generated_out=mcqs,
+            per_question=max(1, args.per_question),
         )
         print(f"          -> cleaned + {len(produced)} MCQ(s)")
 
