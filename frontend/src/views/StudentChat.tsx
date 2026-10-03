@@ -307,13 +307,34 @@ export default function StudentChat() {
   const hasMessages = messages.length > 0
 
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 overflow-hidden">
-      {/* --------------------------------------------------------- Sidebar */}
+    <div className="flex min-h-0 w-full flex-1 overflow-hidden">
+      {/* --------------------------------------------------------- Sidebar
+          Anchored to the far left edge of the workspace (fixed width), exactly
+          as in ChatGPT / Gemini. On small screens it overlays the chat. */}
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close history"
+          onClick={() => setSidebarOpen(false)}
+          className="absolute inset-0 z-10 bg-slate-900/30 md:hidden"
+        />
+      )}
       <aside
         className={`${
           sidebarOpen ? 'absolute inset-y-0 left-0 z-20 flex w-72 shadow-xl' : 'hidden'
-        } shrink-0 flex-col border-r border-slate-200 bg-white md:static md:z-auto md:flex md:shadow-none`}
+        } shrink-0 flex-col border-r border-slate-200 bg-slate-50 md:static md:z-auto md:flex md:w-64 md:shadow-none lg:w-72`}
       >
+        <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3">
+          <span className="text-sm font-semibold text-slate-800">Chats</span>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="rounded-md p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700 md:hidden"
+            aria-label="Close history"
+          >
+            <PanelLeft className="h-4 w-4" />
+          </button>
+        </div>
         <div className="border-b border-slate-100 p-3">
           <button
             type="button"
@@ -384,8 +405,10 @@ export default function StudentChat() {
         </div>
       </aside>
 
-      {/* ------------------------------------------------------------ Chat */}
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/* ------------------------------------------------------------ Chat
+          The transcript and composer share one centred column with a max width,
+          so a reply never stretches across a wide monitor. */}
+      <div className="flex min-h-0 flex-1 flex-col bg-white">
         {/* Compact bar: identity, module scope, and thread control on one line. */}
         <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3">
           <button
@@ -448,21 +471,23 @@ export default function StudentChat() {
           </div>
         )}
 
-        {/* Transcript scrolls independently; the composer stays pinned. */}
+        {/* Transcript scrolls independently; the composer stays pinned. Both sit
+            inside a centred, width-capped column. */}
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5"
+          className="min-h-0 flex-1 overflow-y-auto"
         >
+          <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6">
           {!hasMessages && !loadingSession && (
-            <div className="flex h-full flex-col items-center justify-center px-2 text-center">
-              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-on-accent shadow-sm">
-                <Bot className="h-5 w-5" />
+              <div className="flex h-full flex-col items-center justify-center px-2 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-on-accent shadow-sm">
+                <Bot className="h-6 w-6" />
               </div>
-              <p className="text-sm font-medium text-slate-700">
+              <p className="text-base font-semibold text-slate-800">
                 Ask about {activeModule.module_name}
               </p>
-              <p className="mt-1 max-w-sm text-xs leading-relaxed text-slate-500">
+              <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-500">
                 Paste a stack trace or describe what you are stuck on. The tutor answers
                 with the next question or hint rather than the finished solution, and
                 cites the lecture material it used. Your chats are saved by module and
@@ -481,7 +506,7 @@ export default function StudentChat() {
           {messages.map((message) =>
             message.role === 'user' ? (
               <div key={message.message_id} className="flex justify-end gap-2.5">
-                <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-blue-600 px-3.5 py-2 text-sm leading-relaxed text-on-accent shadow-sm">
+                <div className="max-w-[75%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-blue-600 px-3.5 py-2 text-sm leading-relaxed text-on-accent shadow-sm">
                   {message.content}
                 </div>
                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600">
@@ -493,7 +518,7 @@ export default function StudentChat() {
                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-on-accent shadow-sm">
                   <Bot className="h-3.5 w-3.5" />
                 </div>
-                <div className="min-w-0 max-w-[90%] flex-1">
+                <div className="min-w-0 max-w-[85%] flex-1">
                   <MarkdownMessage
                     content={message.content}
                     citations={message.audit?.retrieval.citations}
@@ -530,16 +555,19 @@ export default function StudentChat() {
               </span>
             </div>
           )}
+          </div>
         </div>
 
-        {/* Composer: Enter sends, Shift+Enter breaks the line. */}
+        {/* Composer: Enter sends, Shift+Enter breaks the line. Centred in the
+            same max-width column as the transcript, pinned to the bottom. */}
         <form
           onSubmit={(e) => {
             e.preventDefault()
             void send()
           }}
-          className="sticky bottom-0 shrink-0 border-t border-slate-200 bg-slate-100/80 px-4 py-3 backdrop-blur"
+          className="shrink-0 border-t border-slate-200 bg-white/90 px-4 py-3 backdrop-blur"
         >
+          <div className="mx-auto w-full max-w-3xl">
           <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-1.5 shadow-sm transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
             <textarea
               ref={composerRef}
@@ -586,6 +614,7 @@ export default function StudentChat() {
               'New session — your first message starts a saved chat'
             )}
           </p>
+          </div>
         </form>
       </div>
     </div>

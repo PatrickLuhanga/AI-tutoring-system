@@ -406,7 +406,7 @@ class LLMRouter:
         if config.provider == "local":
             text, backend = self._generate_ollama(config, messages, temp, tokens, json_mode)
         else:
-            text, backend = self._generate_cloud(config, messages, temp, tokens)
+            text, backend = self._generate_cloud(config, messages, temp, tokens, json_mode)
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         model = config.local_model if config.provider == "local" else config.cloud_model
@@ -552,6 +552,7 @@ class LLMRouter:
         messages: Sequence[dict[str, str]],
         temperature: float,
         max_tokens: int,
+        json_mode: bool = False,
     ) -> tuple[str, str]:
         api_key = self.config_service.get_api_key(config) or self._env_cloud_api_key(config)
         if not api_key:
@@ -567,7 +568,7 @@ class LLMRouter:
             )
         else:
             text, backend = self._generate_openai(
-                config, messages, api_key, temperature, max_tokens
+                config, messages, api_key, temperature, max_tokens, json_mode
             )
         # A reasoning model served through an OpenAI-compatible endpoint (e.g.
         # deepseek-r1) can inline its chain of thought the same way Ollama does.
@@ -580,6 +581,7 @@ class LLMRouter:
         api_key: str,
         temperature: float,
         max_tokens: int,
+        json_mode: bool = False,
     ) -> tuple[str, str]:
         base = config.cloud_base_url.rstrip("/")
         if config.cloud_provider == "azure_openai":
@@ -598,6 +600,11 @@ class LLMRouter:
             "max_tokens": max_tokens,
             "top_p": config.top_p,
         }
+        # OpenAI-compatible providers (OpenAI, Groq, Azure, ...) honour a JSON
+        # response format. Asking for it makes structured consumers - the
+        # practice generator, the intent classifier - far more reliable.
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
         try:
             response = self._session.post(
                 url, json=body, headers=headers, timeout=settings.llm_request_timeout
