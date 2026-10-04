@@ -322,8 +322,37 @@ class Settings:
 
     # -- Convenience ---------------------------------------------------------
     def resolve_module(self, folder_name: str) -> Optional[Dict[str, str]]:
-        """Map a top-level content folder (e.g. ``IPRT``) to its module record."""
-        return self.modules.get(folder_name.strip().upper())
+        """Map a top-level content folder to its module record.
+
+        Accepts the bare registry key (``IPRT``), the module id/code
+        (``IPRT301``) and the LMS export convention
+        (``IPRT301_SEM1_2026_2026104_0831``). The export prefixes each module
+        folder with the module code and a semester stamp, so a naive
+        ``modules.get(folder)`` missed every file and ingestion silently produced
+        zero chunks. We try, in order: the exact key, the leading token before
+        the first underscore (``IPRT301``), and a prefix match of any registry
+        key against the folder name.
+        """
+        name = folder_name.strip().upper()
+        if not name:
+            return None
+
+        # 1. Exact registry key, e.g. "IPRT".
+        exact = self.modules.get(name)
+        if exact is not None:
+            return exact
+
+        # 2. Leading token before the first underscore, e.g. "IPRT301_...".
+        head = name.split("_", 1)[0]
+        for key, record in self.modules.items():
+            if key == head or record["module_id"] == head or record.get("module_code") == head:
+                return record
+
+        # 3. The folder starts with a registry key or a module id/code.
+        for key, record in self.modules.items():
+            if name.startswith(key) or name.startswith(record["module_id"]):
+                return record
+        return None
 
     def folder_for_module_id(self, module_id: str) -> Optional[str]:
         """Inverse of :meth:`resolve_module`: the content folder for a ``module_id``.
