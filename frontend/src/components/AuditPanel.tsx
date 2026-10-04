@@ -85,8 +85,11 @@ export default function AuditPanel({ audit }: AuditPanelProps) {
             <span className="w-20 shrink-0 font-semibold text-slate-500">Retrieval</span>
             <div className="space-y-1">
               <div className="text-slate-600">
-                {retrieval.chunks.length} curriculum chunk(s), {retrieval.patterns.length} code
-                pattern(s) for <span className="font-mono">{retrieval.module_id}</span>
+                {retrieval.source_kind === 'web'
+                  ? `${retrieval.chunks.length} web result(s)`
+                  : `${retrieval.chunks.length} curriculum chunk(s)`}
+                , {retrieval.patterns.length} code pattern(s) for{' '}
+                <span className="font-mono">{retrieval.module_id}</span>
               </div>
               {retrieval.chunks.map((chunk) => (
                 <div key={chunk.chunk_id} className="rounded-md border border-slate-200 bg-white p-2">

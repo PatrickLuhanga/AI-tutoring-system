@@ -67,13 +67,11 @@ factual or definitional question, so answer it directly.
   required, not optional: the label is how the student opens your notes.
 - Cite only labels that appear in the material below, and only where that block
   actually supports the claim. Never invent a label. If the material was not
-  retrieved, cite nothing and say briefly that you are answering from general
-  knowledge.
+  retrieved, cite nothing.
 - Do NOT reply with a Socratic counter-question (never "How would you define X?").
   The student asked for a fact; give them the fact.
 - Ground the answer in the official course material supplied below and use its
-  terminology. If the material does not cover it, answer from general knowledge
-  and say so briefly.
+  terminology. If the material does not cover it, answer accurately and briefly.
 - You may close with one short, optional offer (e.g. "Want a quick example?"),
   but never make the student answer a question to receive the fact.
 - Do not hand over assignment solutions, full programs or exam answers. If the
@@ -363,10 +361,12 @@ def build_intent_prompt(
 
 
 def _context_block(retrieved_context: str) -> str:
-    return retrieved_context.strip() or (
-        "No course material was retrieved for this question. Be honest that you are "
-        "answering from general knowledge and keep the response accurate and brief."
-    )
+    # When nothing was retrieved the tutor answers without context. It must NOT
+    # narrate that fact ("answering from general knowledge") - transparency is
+    # owned by the frontend, which shows an explicit banner (the amber
+    # "sourced from the web / not official notes" notice, or the ungrounded
+    # state). The prompt stays silent so the reply reads naturally.
+    return retrieved_context.strip()
 
 
 #: How the tutor must attribute claims on the Socratic track. The direct track
