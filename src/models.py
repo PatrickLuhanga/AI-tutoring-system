@@ -516,6 +516,11 @@ class TelemetryLog(Base):
     third_party_fallback: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    #: True when the answer was generated from web results because the vector
+    #: store returned no material. Surfaces how often the tutor leaves the KB.
+    web_sourced: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -685,6 +690,48 @@ class UnansweredQuestion(Base):
         UniqueConstraint("module_id", "question_key", name="uq_unanswered_open"),
         Index("ix_unanswered_status_module", "status", "module_id"),
         Index("ix_unanswered_module_time", "module_id", "created_at"),
+    )
+
+
+class ContentMiss(Base):
+    """Lecturer telemetry: a question the module's own material could not answer.
+
+    Distinct from :class:`UnansweredQuestion` (a tutor worklist). A *content
+    miss* is recorded every time retrieval returns nothing and the turn leaves
+    the knowledge base - whether that is because the web fallback answered, or
+    because nothing was found anywhere. It is the signal a lecturer needs to see
+    which topics their ingested notes do not cover, so they can fill the gap.
+
+    One row per turn (not deduplicated), because the *rate* of misses per topic
+    over time is the useful measure; aggregation happens at read time.
+    """
+
+    __tablename__ = "content_misses"
+
+    miss_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    message_id: Mapped[Optional[str]] = mapped_column(String(64))
+    student_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("students.student_id", ondelete="SET NULL")
+    )
+    module_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("modules.module_id", ondelete="SET NULL")
+    )
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    #: True when the web fallback actually supplied context for the reply.
+    web_used: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    #: How many web results contributed (0 when the web found nothing too).
+    web_result_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    #: Domains that contributed, for "where did this answer come from".
+    domains: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_content_misses_module_time", "module_id", "created_at"),
+        Index("ix_content_misses_web", "web_used"),
     )
 
 

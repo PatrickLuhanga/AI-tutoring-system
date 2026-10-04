@@ -174,19 +174,34 @@ def resolve_doc_path(module_id: str, rel_path: str) -> Optional[Path]:
     folder, _record = resolved
 
     root = content_root().resolve()
-    # The content folder is named by the registry key (``IPRT``), not the module id
-    # (``IPRT301``). resolve_any gives us the translation in either direction.
-    candidate = (root / folder / rel_path).resolve()
+    rel = (rel_path or "").strip().lstrip("/")
+    candidates: list[Path] = []
+    # The caller's ``rel_path`` is already relative to the module folder, so it
+    # is tried directly under the real folder first. But the module folder on
+    # disk may be the bare key (``IPRT``) or the LMS export name
+    # (``IPRT301_SEM1_...``), and older callers pass the full stored path
+    # (including the folder). Try each plausible base so a link resolves
+    # regardless of which convention produced it.
+    candidates.append(root / folder / rel)
+    candidates.append(root / rel)
+    # Match a prefixed export folder for this module.
     try:
-        candidate.relative_to(root)
-    except ValueError:
-        logger.warning("Rejected corpus path outside the content directory: %s", rel_path)
-        return None
-    if not candidate.is_file():
-        return None
-    if candidate.suffix.lower() not in RENDERABLE_SUFFIXES:
-        return None
-    return candidate
+        for child in root.iterdir():
+            if child.is_dir() and child.name.upper().startswith(folder.upper()):
+                candidates.append(child / rel)
+    except OSError:
+        pass
+
+    for candidate in candidates:
+        try:
+            resolved_candidate = candidate.resolve()
+            resolved_candidate.relative_to(root)
+        except (ValueError, OSError):
+            continue
+        if resolved_candidate.is_file() and resolved_candidate.suffix.lower() in RENDERABLE_SUFFIXES:
+            return resolved_candidate
+    logger.warning("Rejected or missing corpus path: %s", rel_path)
+    return None
 
 
 def _unique_anchor(base: str, seen: set[str]) -> str:
@@ -650,11 +665,24 @@ def document_rel_path(source_file: str, module_id: str) -> str:
     the module folder: ``IPRT/slides/01_Inheritance.md``. The resource routes are
     mounted per module (``/resources/IPRT301/<path>``), so the leading folder has
     to come off or every citation 404s.
+
+    The folder on disk may be the bare registry key (``IPRT``) or the LMS export
+    name (``IPRT301_SEM1_2026_...``). Either way it is the *first* path segment,
+    so strip it unconditionally rather than only when it equals the registry
+    key - otherwise the doubled prefix makes every citation 404 on a real corpus.
     """
     path = (source_file or "").strip().lstrip("/")
-    parts = path.split("/")
+    parts = [p for p in path.split("/") if p]
+    if not parts:
+        return ""
+
     folder = settings.folder_for_module_id(module_id)
-    if folder and parts and parts[0].upper() == folder.upper():
+    first = parts[0].upper()
+    if folder and (
+        first == folder.upper()
+        or first.startswith(folder.upper())
+        or first.startswith((module_id or "").upper())
+    ):
         parts = parts[1:]
     return "/".join(parts)
 
@@ -679,6 +707,11 @@ def citation_url(module_id: str, source_file: str, section_title: Optional[str])
     rel = document_rel_path(source_file, module_id)
     anchor = slugify(section_title) if section_title else ""
     if not rel:
+        return "", anchor
+    # The resource page route renders Markdown/text only. A chunk whose source is
+    # a raw PDF/PPTX has no renderable page, so advertising a link would 404.
+    # Return no URL in that case; the citation still carries the source name.
+    if Path(rel).suffix.lower() not in RENDERABLE_SUFFIXES:
         return "", anchor
     base = f"/resources/{module_id}/{rel}"
     if anchor:

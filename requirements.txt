@@ -37,6 +37,10 @@ requests>=2.31.0
 cryptography>=42.0.0
 # Optional: enables browser access from the Client Tier.
 flask-cors>=4.0.0
+# Web fallback when the vector store has no answer: a lightweight, keyless
+# search backend for src/web_fallback.py. `ddgs` is the maintained successor to
+# `duckduckgo-search`; the module imports whichever is installed.
+ddgs>=9.0.0
 
 # Test suite (tests/).
 pytest>=8.0

@@ -149,6 +149,14 @@ class RetrievalResult:
     third_party_fallback: bool = False
     relaxed_answer_filter: bool = False
     below_threshold: int = 0
+    #: Where the served context came from: ``"curriculum"`` (the module's own
+    #: vector store), ``"web"`` (the web fallback), or ``"none"``. The UI reads
+    #: this to show the "sourced from the web" warning.
+    source_kind: str = "curriculum"
+    #: Domains contributing to a ``"web"`` result, for telemetry and display.
+    web_domains: list[str] = field(default_factory=list)
+    #: True when the web fallback actually ran (even if it returned nothing).
+    web_attempted: bool = False
 
     @property
     def chunk_ids(self) -> list[int]:
@@ -181,14 +189,26 @@ class RetrievalResult:
         if any(c.source_category in THIRD_PARTY_CATEGORIES for c in self.chunks):
             self.third_party_fallback = True
 
+    @property
+    def is_web(self) -> bool:
+        return self.source_kind == "web"
+
     def context_text(self) -> str:
         """Flatten everything retrieved into one prompt-ready block.
 
         Each curriculum block carries a citation label, its source document and
         its section heading, because the prompt asks the tutor to attribute each
         claim. A student can then follow the label to the exact notes.
+
+        A web-sourced result is prefixed with an explicit provenance banner so
+        the model understands - and can tell the student - that this is *not*
+        official course material.
         """
         blocks: list[str] = []
+        if self.is_web and self.chunks:
+            blocks.append(
+                "--- WEB RESULTS (not official course notes; say so if you use them) ---"
+            )
         for chunk in self.chunks:
             label = chunk.cite_key or f"C{self.chunks.index(chunk) + 1}"
             title = plain_title(chunk.section_title) or chunk.source_name
@@ -217,9 +237,50 @@ class RetrievalResult:
                 "source_category": chunk.source_category,
                 "is_answer": chunk.is_answer,
             }
-            for chunk in self.chunks
+             for chunk in self.chunks
             if chunk.cite_key
         ]
+
+    @classmethod
+    def from_web(
+        cls,
+        query: str,
+        module_id: str,
+        web_results: list,
+        *,
+        policy: Optional[RetrievalPolicy] = None,
+    ) -> "RetrievalResult":
+        """Build a web-sourced result from :class:`src.web_fallback.WebResult`s.
+
+        Web hits are wrapped as synthetic :class:`RetrievedChunk`s so the tutor
+        prompt, citation builder and guardrail all work unchanged. ``distance``
+        is set to ``0.0`` (they are not from the vector store) and
+        ``source_category`` to ``"web"`` so nothing downstream mistakes them for
+        curriculum material.
+        """
+        result = cls(query=query, module_id=module_id, policy=policy)
+        result.source_kind = "web"
+        result.web_attempted = True
+        for index, hit in enumerate(web_results, start=1):
+            result.chunks.append(
+                RetrievedChunk(
+                    chunk_id=-index,  # synthetic, non-positive so it cannot clash
+                    module_id=module_id,
+                    source_name=hit.title,
+                    source_file=hit.domain or hit.url,
+                    section_title=hit.title,
+                    text=hit.snippet,
+                    distance=0.0,
+                    source_category="web",
+                    is_answer=False,
+                    cite_key=f"W{index}",
+                    url=hit.url,
+                    anchor="",
+                )
+            )
+            if hit.domain and hit.domain not in result.web_domains:
+                result.web_domains.append(hit.domain)
+        return result
 
 
 class Retriever:

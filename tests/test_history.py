@@ -35,23 +35,11 @@ class _Audit:
         return {"flagged": False, "flags": [], "action": "pass"}
 
 
-class _EmptyRetrieval:
-    query = "why does my loop never end"
-    module_id = "IPRT301"
-    chunks: list = []
-    patterns: list = []
-    chunk_ids: list = []
-    pattern_ids: list = []
-    grounding_categories: list = []
-    third_party_fallback = False
-    below_threshold = 0
-    is_empty = True
+def _empty_retrieval():
+    """A real RetrievalResult (so it carries every current field)."""
+    from src.retriever import RetrievalResult
 
-    def context_text(self) -> str:
-        return ""
-
-    def citations(self) -> list:
-        return []
+    return RetrievalResult(query="why does my loop never end", module_id="IPRT301")
 
 
 def test_generation_eval_is_isolated_by_default():
@@ -74,7 +62,9 @@ def test_non_persisting_workflow_writes_nothing(monkeypatch):
     from src.agents.workflow import ChatRequest, TutoringWorkflow
 
     wf = TutoringWorkflow(persist=False)
-    monkeypatch.setattr(wf, "_retrieve", lambda *a, **k: _EmptyRetrieval())
+    monkeypatch.setattr(wf, "_retrieve", lambda *a, **k: _empty_retrieval())
+    # An empty retrieval would trigger the web fallback; keep the test hermetic.
+    monkeypatch.setattr(wf, "_web_fallback", lambda *a, **k: None)
     monkeypatch.setattr(wf.intent_agent, "classify", lambda *a, **k: _Intent())
     monkeypatch.setattr(wf.scaffolding, "determine_stage", lambda *a, **k: ("hint", 1))
     monkeypatch.setattr(wf.tutor, "draft", lambda *a, **k: _Resp())

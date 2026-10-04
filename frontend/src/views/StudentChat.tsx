@@ -8,6 +8,7 @@ import {
   Send,
   Square,
   Trash2,
+  TriangleAlert,
   User,
 } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -519,6 +520,18 @@ export default function StudentChat() {
                   <Bot className="h-3.5 w-3.5" />
                 </div>
                 <div className="min-w-0 max-w-[85%] flex-1">
+                  {message.audit?.retrieval.source_kind === 'web' && (
+                    <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Sourced from the web, not official course notes
+                        {message.audit.retrieval.web_domains?.length
+                          ? ` (${message.audit.retrieval.web_domains.join(', ')})`
+                          : ''}
+                        .
+                      </span>
+                    </div>
+                  )}
                   <MarkdownMessage
                     content={message.content}
                     citations={message.audit?.retrieval.citations}

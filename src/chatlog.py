@@ -173,3 +173,44 @@ def delete_session(session_id: str) -> int:
             delete(ChatTurn).where(ChatTurn.session_id == str(session_id)[:64])
         )
         return int(result.rowcount or 0)
+
+
+def record_content_miss(
+    *,
+    session_id: str,
+    question_text: str,
+    module_id: Optional[str] = None,
+    message_id: Optional[str] = None,
+    student_id: Optional[int] = None,
+    web_used: bool = False,
+    web_result_count: int = 0,
+    domains: Optional[Sequence[str]] = None,
+) -> Optional[int]:
+    """Log a question the module's own material could not answer.
+
+    Best-effort, like every other telemetry write here: a failure must never cost
+    a student their answer. Returns the row id or ``None``.
+    """
+    text = (question_text or "").strip()
+    if not text:
+        return None
+    try:
+        from .models import ContentMiss
+
+        with session_scope() as session:
+            row = ContentMiss(
+                session_id=str(session_id)[:64],
+                message_id=(str(message_id)[:64] if message_id else None),
+                student_id=student_id,
+                module_id=(str(module_id).strip().upper() if module_id else None),
+                question_text=text,
+                web_used=bool(web_used),
+                web_result_count=int(web_result_count or 0),
+                domains=[str(d) for d in (domains or [])][:20],
+            )
+            session.add(row)
+            session.flush()
+            return int(row.miss_id)
+    except Exception as exc:  # noqa: BLE001 - telemetry must not break a reply
+        logger.warning("Could not record content miss: %s", exc)
+        return None

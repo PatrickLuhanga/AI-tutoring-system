@@ -167,6 +167,26 @@ class TutoringWorkflow:
         # Data Tier: degrade to empty context if the vector store is unreachable.
         retrieval = self._retrieve(request, intent, stage, direct)
 
+        # When the module's own material produced nothing, fall back to a web
+        # search rather than answering from the model's general knowledge. The
+        # web context flows through the same tutor prompt and the same Guardrail
+        # below; it is only *labelled* differently.
+        web_outcome = None
+        if retrieval.is_empty and settings.web_fallback_enabled:
+            web_outcome = self._web_fallback(request)
+            if web_outcome is not None and web_outcome.results:
+                retrieval = RetrievalResult.from_web(
+                    request.message,
+                    request.module_id,
+                    web_outcome.results,
+                    policy=getattr(retrieval, "policy", None),
+                )
+            elif web_outcome is not None:
+                # Searched but found nothing: record the attempt on the empty
+                # result so telemetry can distinguish "no material" from
+                # "no material and no web".
+                retrieval.web_attempted = True
+
         # Inference Tier: may raise LLMError -> handled as a clean 502 upstream.
         if direct:
             # Factual / definitional: answer from RAG, bypass scaffolding.
@@ -238,6 +258,14 @@ class TutoringWorkflow:
                 latency_ms=latency_ms,
             )
 
+            # Lecturer telemetry: record every turn that left the knowledge base
+            # (retrieval empty), regardless of whether the web filled the gap.
+            self._record_content_miss(
+                request=request,
+                retrieval=retrieval,
+                message_id=message_id,
+            )
+
         return WorkflowResult(
             session_id=request.session_id,
             message_id=message_id,
@@ -253,6 +281,9 @@ class TutoringWorkflow:
                 "third_party_fallback": retrieval.third_party_fallback,
                 "below_threshold": retrieval.below_threshold,
                 "context_empty": retrieval.is_empty,
+                "source_kind": retrieval.source_kind,
+                "web_domains": retrieval.web_domains,
+                "web_attempted": retrieval.web_attempted,
             },
             llm=draft.to_dict(),
             telemetry_log_id=log_id,
@@ -265,6 +296,21 @@ class TutoringWorkflow:
             if module["module_id"] == module_id:
                 return module["module_name"]
         return module_id
+
+    @staticmethod
+    def _web_fallback(request: ChatRequest):
+        """Run the two-pass web search. Returns ``None`` if it is disabled/unavailable.
+
+        Never raises: a web outage degrades to the existing honest "no material"
+        reply instead of failing the turn.
+        """
+        try:
+            from ..web_fallback import search as web_search
+
+            return web_search(request.message)
+        except Exception as exc:  # noqa: BLE001 - web must never break a turn
+            logger.warning("Web fallback failed for %r: %s", request.message[:60], exc)
+            return None
 
     def _retrieve(
         self,
@@ -564,6 +610,36 @@ class TutoringWorkflow:
             logger.warning("Could not evaluate question for the tutor queue: %s", exc)
 
     @staticmethod
+    def _record_content_miss(
+        *,
+        request: ChatRequest,
+        retrieval: RetrievalResult,
+        message_id: str,
+    ) -> None:
+        """Log a question the module's own material could not answer.
+
+        Recorded when the curriculum KB returned nothing - i.e. the turn left the
+        knowledge base. ``web_used`` distinguishes "the web answered" from "the
+        web found nothing either", which is exactly the gap a lecturer needs to
+        see. Best-effort; never breaks the reply.
+        """
+        try:
+            from ..chatlog import record_content_miss
+
+            record_content_miss(
+                session_id=request.session_id,
+                message_id=message_id,
+                student_id=request.student_id,
+                module_id=request.module_id,
+                question_text=request.message,
+                web_used=retrieval.is_web,
+                web_result_count=len(retrieval.chunks) if retrieval.is_web else 0,
+                domains=retrieval.web_domains,
+            )
+        except Exception as exc:  # noqa: BLE001 - never break a reply
+            logger.warning("Could not record content miss: %s", exc)
+
+    @staticmethod
     def _count_session_turns(session_id: str) -> int:
         """Return how many turns this session has had (0 if the DB is down)."""
         try:
@@ -620,6 +696,7 @@ class TutoringWorkflow:
                     response_latency_ms=latency_ms,
                     retrieval_categories=retrieval.grounding_categories,
                     third_party_fallback=retrieval.third_party_fallback,
+                    web_sourced=retrieval.is_web,
                 )
                 session.add(log)
                 session.flush()

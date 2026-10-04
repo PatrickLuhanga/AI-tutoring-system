@@ -150,7 +150,28 @@ def test_worked_solutions_become_available_at_the_explanation_stage(corpus_loade
     exercises), so this asserts the flag changes what retrieval returns rather
     than that the flag exists.
     """
+    from sqlalchemy import func, select
+
+    from src.db import session_scope
+    from src.models import CurriculumChunk
     from src.retriever import get_retriever
+
+    # The assertion is only meaningful when the corpus actually carries
+    # answer-flagged chunks. A corpus ingested from raw PDFs/PPTX (no
+    # ``answers`` source category) has none, so there is nothing to unlock.
+    with session_scope() as session:
+        answer_chunks = int(
+            session.scalar(
+                select(func.count())
+                .select_from(CurriculumChunk)
+                .where(CurriculumChunk.is_answer.is_(True))
+            )
+            or 0
+        )
+    if not answer_chunks:
+        import pytest
+
+        pytest.skip("corpus has no answer-flagged chunks to withhold/unlock")
 
     retriever = get_retriever()
     query = "Show me the solution to the RMI square of numbers example"

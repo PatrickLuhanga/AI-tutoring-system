@@ -170,6 +170,12 @@ export interface RetrievalResult {
   third_party_fallback?: boolean
   below_threshold?: number
   context_empty?: boolean
+  /** `curriculum` (the module's own notes), `web` (web fallback), or `none`. */
+  source_kind?: 'curriculum' | 'web' | 'none' | string
+  /** Domains contributing to a `web` result. */
+  web_domains?: string[]
+  /** True when the web fallback ran (even if it found nothing). */
+  web_attempted?: boolean
 }
 
 export interface LLMResult {

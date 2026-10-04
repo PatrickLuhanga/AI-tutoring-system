@@ -240,3 +240,162 @@ class _Settings:
         self.openrouter_api_key = kwargs.get("openrouter_api_key", "")
         self.backup_cloud_model = "meta-llama/llama-3.3-70b-instruct:free"
         self.llm_request_timeout = 120
+
+
+# ---------------------------------------------------------------------------
+# Web fallback
+# ---------------------------------------------------------------------------
+def test_web_fallback_result_is_labelled_and_citable():
+    from src.retriever import RetrievalResult
+    from src.web_fallback import WebResult
+
+    wb = [
+        WebResult(
+            title="Research methods",
+            url="https://dut.ac.za/research",
+            domain="dut.ac.za",
+            snippet="Research is systematic inquiry.",
+        )
+    ]
+    result = RetrievalResult.from_web("what is research", "RESK301", wb)
+
+    assert result.source_kind == "web"
+    assert result.is_web is True
+    assert len(result.chunks) == 1
+    # The prompt context must warn the model these are not official notes.
+    assert "not official course notes" in result.context_text()
+    # Citations carry the web domain and a W-prefixed key.
+    cites = result.citations()
+    assert cites[0]["source_file"] == "dut.ac.za"
+    assert cites[0]["source_category"] == "web"
+    assert cites[0]["cite_key"] == "W1"
+    assert result.web_domains == ["dut.ac.za"]
+
+
+def test_web_fallback_whitelist_pass_used_when_hits_exist(monkeypatch):
+    from src import web_fallback
+
+    calls: list[str] = []
+
+    def fake_run(query, *, max_results, timeout):
+        calls.append(query)
+        return [{"title": "T", "href": "https://python.org/x", "body": "snippet"}]
+
+    monkeypatch.setattr(web_fallback, "_run_search", fake_run)
+    outcome = web_fallback.search(
+        "what is a list", whitelist=("python.org",), max_results=3, timeout=5
+    )
+
+    assert outcome.from_whitelist is True
+    assert outcome.used_general is False
+    assert len(outcome.results) == 1
+    assert outcome.results[0].domain == "python.org"
+    # Only the whitelist pass ran (one call), with a site: restriction.
+    assert len(calls) == 1
+    assert "site:python.org" in calls[0]
+
+
+def test_web_fallback_general_pass_runs_when_whitelist_empty(monkeypatch):
+    from src import web_fallback
+
+    def fake_run(query, *, max_results, timeout):
+        if "site:" in query:
+            return []  # whitelist misses
+        return [
+            {"title": "General", "href": "https://example.com/a", "body": "s"},
+            {"title": "Dup", "href": "https://example.com/a", "body": "s"},
+        ]
+
+    monkeypatch.setattr(web_fallback, "_run_search", fake_run)
+    outcome = web_fallback.search(
+        "obscure topic", whitelist=("python.org",), max_results=5, timeout=5
+    )
+
+    assert outcome.from_whitelist is False
+    assert outcome.used_general is True
+    # Duplicates by URL are removed.
+    assert len(outcome.results) == 1
+    assert outcome.results[0].domain == "example.com"
+
+
+def test_web_fallback_never_raises_on_search_failure(monkeypatch):
+    from src import web_fallback
+
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(web_fallback, "_run_search", boom)
+    outcome = web_fallback.search("anything", whitelist=("python.org",))
+    assert outcome.results == []
+    assert outcome.from_whitelist is False
+
+
+class _FakeWebOutcome:
+    def __init__(self):
+        from src.web_fallback import WebResult
+
+        self.results = [
+            WebResult(
+                title="Research",
+                url="https://dut.ac.za/r",
+                domain="dut.ac.za",
+                snippet="Research is systematic inquiry.",
+            )
+        ]
+        self.from_whitelist = True
+        self.used_general = False
+
+
+def test_workflow_uses_web_fallback_when_store_is_empty(monkeypatch):
+    """An empty vector store routes through the web fallback and is labelled."""
+    from src.agents.workflow import ChatRequest, TutoringWorkflow
+
+    class _Intent:
+        label = "conceptual"
+        route = "scaffold"
+        confidence = 0.5
+
+        def to_dict(self):
+            return {"label": self.label, "route": self.route}
+
+    class _Resp:
+        text = "Web-grounded hint."
+
+        def to_dict(self):
+            return {"text": self.text, "provider": "cloud", "model": "m", "backend": "groq", "latency_ms": 1}
+
+    class _Audit:
+        approved_text = "Web-grounded hint."
+        flagged = False
+        flags: list = []
+
+        def to_dict(self):
+            return {"flagged": False, "flags": [], "action": "pass"}
+
+    class _Empty:
+        is_empty = True
+        policy = None
+
+        def context_text(self):
+            return ""
+
+        def citations(self):
+            return []
+
+    wf = TutoringWorkflow(persist=False)
+    monkeypatch.setattr(wf, "_retrieve", lambda *a, **k: _Empty())
+    monkeypatch.setattr(wf, "_web_fallback", lambda *a, **k: _FakeWebOutcome())
+    monkeypatch.setattr(wf.intent_agent, "classify", lambda *a, **k: _Intent())
+    monkeypatch.setattr(wf.scaffolding, "determine_stage", lambda *a, **k: ("hint", 1))
+    monkeypatch.setattr(wf.tutor, "draft", lambda *a, **k: _Resp())
+    monkeypatch.setattr(wf.guardrail, "audit", lambda *a, **k: _Audit())
+
+    result = wf.handle(
+        ChatRequest(message="what is research", module_id="RESK301", session_id="web-1")
+    )
+    body = result.to_dict()
+
+    assert body["retrieval"]["source_kind"] == "web"
+    assert body["retrieval"]["web_attempted"] is True
+    assert body["retrieval"]["web_domains"] == ["dut.ac.za"]
+    assert body["retrieval"]["chunks"][0]["source_category"] == "web"

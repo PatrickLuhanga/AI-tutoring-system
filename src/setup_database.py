@@ -90,6 +90,10 @@ def add_missing_columns() -> None:
         # Records the outcome of processing an upload, so the Content console can
         # say what happened instead of leaving every row at "pending".
         "ALTER TABLE uploaded_documents ADD COLUMN IF NOT EXISTS ingest_detail TEXT",
+        # Web fallback telemetry: was this reply generated from web results
+        # because the vector store returned no material.
+        "ALTER TABLE telemetry_logs ADD COLUMN IF NOT EXISTS web_sourced "
+        "BOOLEAN NOT NULL DEFAULT false",
     ]
     try:
         with engine.begin() as conn:

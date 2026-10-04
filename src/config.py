@@ -317,6 +317,14 @@ class Settings:
     guardrail_min_context_overlap: float
     guardrail_action: str
 
+    # Web fallback (used only when the vector store returns nothing). The
+    # whitelisted domains are lecturer-curated; the general web is a last resort
+    # and every web-sourced answer is flagged to the student.
+    web_fallback_enabled: bool
+    web_fallback_domains: tuple[str, ...]
+    web_fallback_max_results: int
+    web_fallback_timeout: int
+
     # Module registry
     modules: Dict[str, Dict[str, str]] = field(default_factory=lambda: dict(MODULE_REGISTRY))
 
@@ -519,6 +527,17 @@ def _build_settings() -> Settings:
         guardrail_max_words=_int("GUARDRAIL_MAX_WORDS", 400),
         guardrail_min_context_overlap=_float("GUARDRAIL_MIN_CONTEXT_OVERLAP", 0.08),
         guardrail_action=_str("GUARDRAIL_ACTION", "block").lower(),
+        web_fallback_enabled=_bool("WEB_FALLBACK_ENABLED", True),
+        web_fallback_domains=tuple(
+            d.strip().lower().lstrip(".")
+            for d in _str(
+                "WEB_FALLBACK_DOMAINS",
+                "learn.microsoft.com,docs.oracle.com,python.org,geeksforgeeks.org,dut.ac.za",
+            ).split(",")
+            if d.strip()
+        ),
+        web_fallback_max_results=_int("WEB_FALLBACK_MAX_RESULTS", 5),
+        web_fallback_timeout=_int("WEB_FALLBACK_TIMEOUT", 5),
     )
 
 

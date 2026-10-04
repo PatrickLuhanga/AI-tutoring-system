@@ -63,7 +63,10 @@ def test_on_topic_questions_are_still_grounded(
     [
         ("PBDV301", "what is research", "a Research Skills topic in a Flask module"),
         ("PBDV301", "explain inheritance and polymorphism", "an OOP topic, not web dev"),
-        ("SPRI301", "what is professional ethics", "no close match in the corpus"),
+        # NB: "what is professional ethics" in SPRI301 used to be listed here,
+        # but once the SPRI301 corpus was fully ingested it matched the module's
+        # own ETHICAL THEORIES lecture at distance 0.39 - a correct on-topic hit,
+        # so the expectation was retired rather than the behaviour.
     ],
 )
 def test_off_topic_questions_return_no_material(
