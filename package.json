@@ -1,0 +1,11 @@
+{
+  "name": "ai-tutoring-system",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -c \"blue,magenta\" -n \"BACKEND,FRONTEND\" \"python -m src.app\" \"npm --prefix frontend run dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

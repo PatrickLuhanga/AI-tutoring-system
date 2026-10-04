@@ -332,12 +332,21 @@ def create_app() -> Flask:
 
 def main() -> int:
     app = create_app()
+    # The backend serves the API only; the browser UI is the Vite dev server.
+    # A newcomer sees werkzeug print "Running on http://127.0.0.1:5000" and
+    # opens that, getting a 404. Say plainly which URL to use.
+    logger.info("=" * 70)
+    logger.info("  AI Tutoring System")
+    logger.info("  App (open this in your browser): %s", settings.frontend_url)
     logger.info(
-        "Starting API Gateway on http://%s:%s (debug=%s)",
+        "  Backend API (do not open directly): http://%s:%s",
         settings.flask_host,
         settings.flask_port,
-        settings.flask_debug,
     )
+    logger.info(
+        "  API health: http://%s:%s/api/health", settings.flask_host, settings.flask_port
+    )
+    logger.info("=" * 70)
     app.run(host=settings.flask_host, port=settings.flask_port, debug=settings.flask_debug)
     return 0
 

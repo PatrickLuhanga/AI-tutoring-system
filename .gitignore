@@ -18,6 +18,11 @@ env/
 .DS_Store
 Thumbs.db
 
+# Node (root `npm run dev` harness). The lockfile IS tracked so a clone gets the
+# exact concurrently version; only the installed tree is ignored.
+node_modules/
+npm-debug.log*
+
 # Model caches (downloaded by sentence-transformers)
 models/
 .cache/

@@ -195,6 +195,10 @@ class Settings:
     flask_host: str
     flask_port: int
     flask_debug: bool
+    #: Where the Client Tier (Vite dev server) is served, so the gateway can
+    #: tell a new developer which URL to actually open in a browser. The API on
+    #: :5000 is not the app; the React UI on :5173 is.
+    frontend_url: str
 
     # Authentication / authorization
     auth_mode: str
@@ -410,6 +414,7 @@ def _build_settings() -> Settings:
         flask_host=_str("FLASK_HOST", "127.0.0.1"),
         flask_port=_int("FLASK_PORT", 5000),
         flask_debug=_bool("FLASK_DEBUG", False),
+        frontend_url=_str("FRONTEND_URL", "http://localhost:5173").rstrip("/"),
         auth_mode=_str("AUTH_MODE", "dev").lower(),
         # Fails closed. A shipped default that works is a shipped default that is
         # never changed: it was "change-me-admin-key", .env.example handed out a
