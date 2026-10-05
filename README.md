@@ -19,6 +19,42 @@ out of scope.
 
 ---
 
+## 0. Quick start for new teammates (Windows)
+
+The fastest way to get running is two steps:
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/PatrickLuhanga/AI-tutoring-system.git
+   ```
+
+2. **Double-click `setup.bat`** in the project folder.
+
+That one script does everything for you:
+
+| Step | What it does |
+| --- | --- |
+| 1 | `git lfs pull` — downloads the large `database_seed.sql` (stored with Git LFS) |
+| 2 | Copies `.env.example` to `.env` (only if `.env` does not already exist) |
+| 3 | `pip install -r requirements.txt` — Python dependencies |
+| 4 | `npm install` — root dev harness (`concurrently`) |
+| 5 | `npm install` (in `frontend/`) — React client |
+| 6 | `npm run db:restore` — starts PostgreSQL and restores the seeded vector store |
+
+When it finishes, start the app with **`npm run dev`** and open
+**http://localhost:5173**. The backend API listens on `http://127.0.0.1:5000`; do not open that URL
+directly — it is not the app.
+
+> **Before asking the tutor a question**, set your `GROQ_API_KEY` in `.env` (the script creates the
+> file but leaves the key blank). Without it, tutor turns return a clean "model unavailable" error.
+
+**Prerequisites** (install once): Git for Windows (includes Git LFS), Python 3.10–3.12, Node.js 20+,
+and Docker Desktop. See [§3 Prerequisites](#3-prerequisites) for details, or [§4 Setup](#4-setup)
+for the manual, step-by-step route if you are not on Windows.
+
+---
+
 ## 1. What is implemented
 
 | Architecture requirement | Implementation |
