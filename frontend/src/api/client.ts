@@ -15,6 +15,7 @@ import type {
   LLMConfig,
   LLMConfigUpdatePayload,
   Module,
+  ModuleMaterials,
   OllamaModelsResponse,
   TelemetryAnalytics,
 } from '../types'
@@ -191,6 +192,36 @@ export const api = {
       `/api/resources/${moduleId}`,
     )
     return body.documents ?? []
+  },
+
+  /**
+   * `GET /api/materials/<module_id>` - the ingested knowledge base straight from
+   * the vector store: real text chunks, topics, document types and sources.
+   */
+  async getMaterials(
+    moduleId: string,
+    opts?: { limit?: number; doc?: string; q?: string },
+  ): Promise<ModuleMaterials> {
+    if (USE_MOCK) {
+      return delay({
+        module_id: moduleId,
+        module_name: moduleId,
+        language: null,
+        total_chunks: 0,
+        document_count: 0,
+        returned_chunks: 0,
+        limit_per_document: opts?.limit ?? 5,
+        documents: [],
+      })
+    }
+    const params = new URLSearchParams()
+    if (opts?.limit != null) params.set('limit', String(opts.limit))
+    if (opts?.doc) params.set('doc', opts.doc)
+    if (opts?.q) params.set('q', opts.q)
+    const qs = params.toString()
+    return http<ModuleMaterials>(
+      `/api/materials/${encodeURIComponent(moduleId)}${qs ? `?${qs}` : ''}`,
+    )
   },
 
   /** `GET /api/admin/llm-config` */

@@ -20,7 +20,7 @@ export const MODULES: Module[] = [
   {
     module_id: 'IPRT301',
     module_code: 'IPRT301',
-    module_name: 'Internet Programming',
+    module_name: 'Integrative Programming',
     course_code: 'DIP3',
     language: 'Java',
   },

@@ -10,7 +10,7 @@
   "modules": {
     "IPRT301": {
       "module_id": "IPRT301",
-      "module_name": "Internet Programming",
+      "module_name": "Integrative Programming",
       "module_code": "IPRT301",
       "course_code": "DIP3",
       "language": "Java",
@@ -34,7 +34,7 @@
         "Debugging",
         "Server-client communication",
         "VAT calculation",
-        "Internet Programming",
+        "Integrative Programming",
         "object-oriented programming",
         "XML",
         "distributed systems",

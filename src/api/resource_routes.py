@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Optional
 
 from flask import Blueprint, jsonify, request
+from sqlalchemy import func, select
 
 from ..config import settings
 from ..corpus_render import (
@@ -36,7 +37,9 @@ from ..corpus_render import (
     render_resource_page,
     resolve_doc_path,
 )
+from ..db import session_scope
 from ..loaders import SOURCE_CATEGORIES
+from ..models import CurriculumChunk
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +156,111 @@ def list_module_resources(module_id: str):
                 "module_id": record["module_id"],
                 "module_name": record["module_name"],
                 "count": len(docs),
+                "documents": docs,
+            }
+        ),
+        200,
+    )
+
+
+@resource_bp.get("/api/materials/<module_id>")
+def list_module_materials(module_id: str):
+    """The ingested knowledge base for one module, straight from the vector store.
+
+    ``/api/resources/<module_id>`` lists *renderable files on disk* (Markdown),
+    which is empty for a corpus ingested from raw PDF/PPTX. This endpoint instead
+    reads ``curriculum_chunks`` - the actual text the tutor retrieves - so a
+    student or lecturer can audit exactly what the RAG system knows.
+
+    Query parameters:
+        ``limit``  chunks returned per document (default 5, max 50)
+        ``doc``    restrict to one ``source_file``
+        ``q``      case-insensitive substring filter over chunk text
+
+    The response groups chunks by source document and reports each document's
+    type, topic, provenance category and total chunk count, so the caller can see
+    coverage as well as content.
+    """
+    resolved = _resolve(module_id)
+    if resolved is None:
+        return jsonify({"error": "Unknown module."}), 404
+    _folder, record = resolved
+    mid = record["module_id"]
+
+    try:
+        per_doc = int(request.args.get("limit", 5))
+    except (TypeError, ValueError):
+        per_doc = 5
+    per_doc = max(1, min(per_doc, 50))
+    doc_filter = (request.args.get("doc") or "").strip()
+    search = (request.args.get("q") or "").strip()
+
+    try:
+        with session_scope() as session:
+            stmt = select(CurriculumChunk).where(CurriculumChunk.module_id == mid)
+            if doc_filter:
+                stmt = stmt.where(CurriculumChunk.source_file == doc_filter)
+            if search:
+                stmt = stmt.where(CurriculumChunk.chunk_text.ilike(f"%{search}%"))
+            stmt = stmt.order_by(
+                CurriculumChunk.source_file,
+                CurriculumChunk.chunk_index,
+                CurriculumChunk.chunk_id,
+            )
+            rows = session.execute(stmt).scalars().all()
+    except Exception as exc:  # noqa: BLE001 - Data Tier must not 500 the page
+        logger.error("Could not load materials for %s: %s", mid, exc)
+        return jsonify({"error": "The material store is temporarily unavailable."}), 503
+
+    # Group into documents, preserving the query's ordering.
+    documents: dict[str, dict] = {}
+    for chunk in rows:
+        doc = documents.get(chunk.source_file)
+        if doc is None:
+            doc = {
+                "source_file": chunk.source_file,
+                "source_name": chunk.source_name,
+                "source_type": chunk.source_type,
+                "source_category": chunk.source_category,
+                "topic": chunk.topic,
+                "section_title": chunk.section_title,
+                "chunk_count": 0,
+                "returned": 0,
+                "chunks": [],
+            }
+            documents[chunk.source_file] = doc
+        doc["chunk_count"] += 1
+        if doc["returned"] < per_doc:
+            doc["chunks"].append(
+                {
+                    "chunk_id": int(chunk.chunk_id),
+                    "chunk_index": int(chunk.chunk_index),
+                    "section_title": chunk.section_title,
+                    "token_count": chunk.token_count,
+                    "is_answer": bool(chunk.is_answer),
+                    "text": chunk.chunk_text,
+                }
+            )
+            doc["returned"] += 1
+
+    # Reading order: faculty material before third-party textbooks, then by path.
+    category_order = {"slides": 0, "lecture_notes": 1, "notes": 1, "examples": 2,
+                      "exercises": 3, "books": 9}
+    docs = sorted(
+        documents.values(),
+        key=lambda d: (category_order.get(d["source_category"], 5), d["source_file"]),
+    )
+
+    return (
+        jsonify(
+            {
+                "module_id": mid,
+                "module_name": record["module_name"],
+                "language": record.get("language"),
+                "total_chunks": len(rows),
+                "document_count": len(docs),
+                "returned_chunks": sum(d["returned"] for d in docs),
+                "limit_per_document": per_doc,
                 "documents": docs,
             }
         ),

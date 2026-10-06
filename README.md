@@ -310,7 +310,7 @@ The four top-level folders under `academic content/` map to the four modules in 
 
 | Folder | `module_id` | Module | Language |
 | --- | --- | --- | --- |
-| `IPRT` | `IPRT301` | Internet Programming | Java |
+| `IPRT` | `IPRT301` | Integrative Programming | Java |
 | `PBDV` | `PBDV301` | Platform Based Development | Python |
 | `RESK` | `RESK301` | Research Skills | N/A |
 | `SPRI` | `SPRI301` | Social and Professional Issues | N/A |

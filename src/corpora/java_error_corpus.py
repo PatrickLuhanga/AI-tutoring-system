@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-#: Java is taught in Internet Programming. Patterns that are not specific to that
+#: Java is taught in Integrative Programming. Patterns that are not specific to that
 #: module's material are left as ``None`` below, which the retriever treats as
 #: "general" and offers in every module - a student pasting Java into another
 #: module's chat should still get help.

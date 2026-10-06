@@ -69,7 +69,10 @@ MODULE_REGISTRY: Dict[str, Dict[str, str]] = {
     "IPRT": {
         "module_id": "IPRT301",
         "module_code": "IPRT301",
-        "module_name": "Internet Programming",
+        # The module is "Integrative Programming and Technologies 3" (IPRT301);
+        # "Internet Programming" was an early typo that reached the registry and
+        # the modules table.
+        "module_name": "Integrative Programming",
         "course_code": "DIP3",
         "language": "Java",
     },

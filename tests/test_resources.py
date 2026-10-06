@@ -215,3 +215,59 @@ def test_a_quote_in_a_filename_cannot_break_the_json_response():
     payload = json.dumps({"url": url})
     assert '\\"' in payload, "the encoder did not escape the quote"
     assert json.loads(payload)["url"] == url, "the round trip lost the value"
+
+
+# ---------------------------------------------------------------------------
+# Ingested knowledge base: /api/materials/<module_id>
+# ---------------------------------------------------------------------------
+def test_materials_route_rejects_unknown_module(client):
+    response = client.get("/api/materials/NOPE999")
+    assert response.status_code == 404
+    assert "error" in response.get_json()
+
+
+def test_materials_route_accepts_registry_key_and_module_id(client):
+    """Both ``IPRT`` and ``IPRT301`` resolve to the same module."""
+    by_key = client.get("/api/materials/IPRT?limit=1")
+    by_id = client.get("/api/materials/IPRT301?limit=1")
+    assert by_key.status_code == 200 and by_id.status_code == 200
+    assert by_key.get_json()["module_id"] == "IPRT301"
+    assert by_id.get_json()["module_id"] == "IPRT301"
+
+
+def test_materials_route_returns_real_chunks_when_ingested(client, corpus_loaded):
+    """The endpoint must expose the actual stored chunks, not an empty list."""
+    body = client.get("/api/materials/IPRT301?limit=2").get_json()
+    assert body["module_id"] == "IPRT301"
+    assert body["total_chunks"] > 0
+    assert body["document_count"] > 0
+    assert body["documents"], "no documents returned despite an ingested corpus"
+
+    doc = body["documents"][0]
+    # Every document carries its source reference, type and topic metadata.
+    for key in ("source_file", "source_name", "source_type", "source_category", "chunk_count"):
+        assert key in doc, f"document is missing {key!r}"
+    assert doc["chunks"], "document returned no chunk text"
+    chunk = doc["chunks"][0]
+    assert chunk["text"].strip(), "chunk text is empty"
+    # ``limit`` bounds the chunks returned per document.
+    assert doc["returned"] <= 2
+
+
+def test_materials_route_filters_by_document_and_text(client, corpus_loaded):
+    listing = client.get("/api/materials/IPRT301?limit=1").get_json()
+    source_file = listing["documents"][0]["source_file"]
+
+    filtered = client.get(
+        f"/api/materials/IPRT301?limit=5&doc={source_file}"
+    ).get_json()
+    assert filtered["document_count"] == 1
+    assert filtered["documents"][0]["source_file"] == source_file
+
+    needle = filtered["documents"][0]["chunks"][0]["text"][:20].strip()
+    if needle:
+        searched = client.get(
+            f"/api/materials/IPRT301?limit=5&q={needle}"
+        ).get_json()
+        assert searched["total_chunks"] >= 1
+

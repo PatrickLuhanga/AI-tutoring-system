@@ -267,6 +267,45 @@ export interface Module {
 }
 
 // ---------------------------------------------------------------------------
+// Ingested knowledge base (`GET /api/materials/<module_id>`)
+// ---------------------------------------------------------------------------
+
+/** One text chunk as stored in the vector store, for auditing. */
+export interface MaterialChunk {
+  chunk_id: number
+  chunk_index: number
+  section_title: string | null
+  token_count: number | null
+  is_answer: boolean
+  text: string
+}
+
+/** One source document and a bounded sample of its ingested chunks. */
+export interface MaterialDocument {
+  source_file: string
+  source_name: string
+  source_type: string
+  source_category: string
+  topic: string | null
+  section_title: string | null
+  chunk_count: number
+  returned: number
+  chunks: MaterialChunk[]
+}
+
+/** Response of `GET /api/materials/<module_id>`. */
+export interface ModuleMaterials {
+  module_id: string
+  module_name: string
+  language: string | null
+  total_chunks: number
+  document_count: number
+  returned_chunks: number
+  limit_per_document: number
+  documents: MaterialDocument[]
+}
+
+// ---------------------------------------------------------------------------
 // Dynamic LLM Router (section 10.2) — shapes from `LLMConfigService.describe`
 // ---------------------------------------------------------------------------
 
