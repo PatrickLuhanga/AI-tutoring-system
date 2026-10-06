@@ -27,6 +27,7 @@ import logging
 import sys
 
 from flask import Flask, jsonify, request
+from sqlalchemy import func, select
 
 from .agents import TutoringWorkflow
 from .api import (
@@ -43,9 +44,10 @@ from .api import (
 )
 from .auth import AuthError
 from .config import settings
-from .db import check_connection
+from .db import check_connection, session_scope
 from .inference import INFERENCE_UNAVAILABLE_MESSAGE
 from .llm_router import LLMError, LLMRouter
+from .models import CurriculumChunk
 from .retriever import Retriever
 from .secrets_store import SecretStoreError
 
@@ -224,6 +226,10 @@ def _register_meta_routes(app: Flask) -> None:
 
     @app.get("/api/modules")
     def modules():
+        # Material counts come from the ingested chunks, so they match the Course
+        # Material viewer (and the tutor's actual knowledge base) rather than the
+        # on-disk renderable-file listing, which is empty for a PDF/PPTX corpus.
+        counts = _module_material_counts()
         return (
             jsonify(
                 {
@@ -232,7 +238,10 @@ def _register_meta_routes(app: Flask) -> None:
                             "module_id": module["module_id"],
                             "module_code": module.get("module_code"),
                             "module_name": module["module_name"],
+                            "course_code": module.get("course_code"),
                             "language": module.get("language"),
+                            "document_count": counts.get(module["module_id"], {}).get("documents", 0),
+                            "chunk_count": counts.get(module["module_id"], {}).get("chunks", 0),
                         }
                         for module in settings.modules.values()
                     ]
@@ -240,6 +249,32 @@ def _register_meta_routes(app: Flask) -> None:
             ),
             200,
         )
+
+
+def _module_material_counts() -> dict[str, dict[str, int]]:
+    """Per-module ``{documents, chunks}`` from the vector store.
+
+    ``documents`` is ``COUNT(DISTINCT source_file)`` - the same definition the
+    Course Material viewer uses - so the Home cards agree with what the tutor can
+    actually retrieve. Best-effort: a Data-Tier hiccup yields zeroed counts rather
+    than failing the module list.
+    """
+    try:
+        with session_scope() as session:
+            rows = session.execute(
+                select(
+                    CurriculumChunk.module_id,
+                    func.count(func.distinct(CurriculumChunk.source_file)),
+                    func.count(),
+                ).group_by(CurriculumChunk.module_id)
+            ).all()
+        return {
+            str(module_id): {"documents": int(documents), "chunks": int(chunks)}
+            for module_id, documents, chunks in rows
+        }
+    except Exception as exc:  # noqa: BLE001 - counts are cosmetic, not critical
+        logger.warning("Could not compute module material counts: %s", exc)
+        return {}
 
 
 def _warn_on_missing_api_keys(router) -> None:

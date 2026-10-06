@@ -6,8 +6,9 @@ import {
   Loader2,
   Search,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { useHashParams } from '../navigation'
 import type { MaterialDocument, Module, ModuleMaterials } from '../types'
 
 /** Reading order and human labels for a document's provenance category. */
@@ -43,17 +44,46 @@ export default function CourseMaterial() {
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [perDoc, setPerDoc] = useState(5)
+  // Deep-link highlight: the document (and optionally section) a citation sent
+  // us to. Pulsed briefly so the eye lands on the right card.
+  const [highlightDoc, setHighlightDoc] = useState<string | null>(null)
+
+  // Deep-link parameters from `#/material?module=...&doc=...&section=...`.
+  const { params } = useHashParams()
+  const linkModule = params.get('module')
+  const linkDoc = params.get('doc')
+  const linkSection = params.get('section')
+
+  const docRefs = useRef<Map<string, HTMLLIElement>>(new Map())
+  // Guards the scroll/expand/pulse so it fires once per distinct citation target.
+  const handledTarget = useRef<string | null>(null)
 
   useEffect(() => {
     void api
       .getModules()
       .then((live) => {
         setModules(live)
-        if (live.length) setActive(live[0].module_id)
+        // Prefer a deep-linked module; fall back to the first.
+        const wanted =
+          linkModule && live.some((m) => m.module_id === linkModule)
+            ? linkModule
+            : live[0]?.module_id
+        if (wanted) setActive(wanted)
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false))
+    // Run once on mount; the module effect below handles later deep-link changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // A deep-link can arrive while the view is already mounted (a second citation
+  // click): switch to the requested module.
+  useEffect(() => {
+    if (!linkModule || !modules.length) return
+    if (modules.some((m) => m.module_id === linkModule)) {
+      setActive((current) => (current === linkModule ? current : linkModule))
+    }
+  }, [linkModule, modules])
 
   const loadMaterials = useCallback(
     async (moduleId: string, limit: number) => {
@@ -76,6 +106,50 @@ export default function CourseMaterial() {
     setExpanded(new Set())
     void loadMaterials(active, perDoc)
   }, [active, perDoc, loadMaterials])
+
+  // A citation targets one document. Fetch that document's full chunk list (up
+  // to the server cap) and merge it in, so a section beyond the default
+  // per-document limit is still present when we jump to it.
+  useEffect(() => {
+    if (!active || !linkDoc) return
+    let cancelled = false
+    api
+      .getMaterials(active, { doc: linkDoc, limit: 200 })
+      .then((res) => {
+        if (cancelled) return
+        const target = res.documents[0]
+        if (!target) return
+        setMaterials((prev) => {
+          if (!prev) return prev
+          const others = prev.documents.filter((d) => d.source_file !== linkDoc)
+          return { ...prev, documents: [target, ...others] }
+        })
+      })
+      .catch(() => {
+        // Deep-link enrichment is best-effort; the module list still renders.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [active, linkDoc])
+
+  // Expand, scroll to, and briefly pulse the deep-linked document card.
+  useEffect(() => {
+    if (!linkDoc) return
+    if (!materials?.documents.some((d) => d.source_file === linkDoc)) return
+    const targetKey = `${linkModule ?? active}|${linkDoc}|${linkSection ?? ''}`
+    if (handledTarget.current === targetKey) return
+    handledTarget.current = targetKey
+
+    setExpanded((prev) => new Set(prev).add(linkDoc))
+    // Let the expansion render before scrolling to it.
+    const timer = window.setTimeout(() => {
+      docRefs.current.get(linkDoc)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setHighlightDoc(linkDoc)
+      window.setTimeout(() => setHighlightDoc((h) => (h === linkDoc ? null : h)), 2600)
+    }, 180)
+    return () => window.clearTimeout(timer)
+  }, [linkDoc, linkModule, linkSection, active, materials])
 
   // Group documents by provenance category for a readable, ordered list.
   const grouped = useMemo(() => {
@@ -201,10 +275,19 @@ export default function CourseMaterial() {
                   <ul className="space-y-2">
                     {items.map((doc) => {
                       const open = expanded.has(doc.source_file)
+                      const isTarget = highlightDoc === doc.source_file
                       return (
                         <li
                           key={doc.source_file}
-                          className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                          ref={(el) => {
+                            if (el) docRefs.current.set(doc.source_file, el)
+                            else docRefs.current.delete(doc.source_file)
+                          }}
+                          className={`overflow-hidden rounded-xl border bg-white shadow-sm transition ${
+                            isTarget
+                              ? 'border-amber-400 ring-2 ring-amber-300 animate-pulse'
+                              : 'border-slate-200'
+                          }`}
                         >
                           <button
                             type="button"
@@ -226,6 +309,11 @@ export default function CourseMaterial() {
                               </span>
                             </span>
                             <span className="flex shrink-0 items-center gap-2 text-[11px] text-slate-400">
+                              {isTarget && (
+                                <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-800">
+                                  Cited source
+                                </span>
+                              )}
                               <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold uppercase text-slate-500">
                                 {doc.source_type}
                               </span>
@@ -241,10 +329,19 @@ export default function CourseMaterial() {
                           {open && (
                             <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
                               <div className="space-y-2">
-                                {doc.chunks.map((chunk) => (
+                                {doc.chunks.map((chunk) => {
+                                  const isCitedChunk =
+                                    isTarget &&
+                                    Boolean(linkSection) &&
+                                    chunk.section_title === linkSection
+                                  return (
                                   <div
                                     key={chunk.chunk_id}
-                                    className="rounded-lg border border-slate-200 bg-white p-3"
+                                    className={`rounded-lg border p-3 ${
+                                      isCitedChunk
+                                        ? 'border-amber-400 bg-amber-50 ring-1 ring-amber-300'
+                                        : 'border-slate-200 bg-white'
+                                    }`}
                                   >
                                     <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-slate-400">
                                       <span className="truncate font-medium text-slate-600">
@@ -260,7 +357,8 @@ export default function CourseMaterial() {
                                       {chunk.text}
                                     </p>
                                   </div>
-                                ))}
+                                  )
+                                })}
                               </div>
                               {doc.chunk_count > doc.returned && (
                                 <p className="mt-2 text-[11px] text-slate-400">

@@ -12,23 +12,13 @@ import {
   User,
 } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { api, USE_MOCK } from '../api/client'
-import { MODULES } from '../api/mockData'
+import { USE_MOCK } from '../api/client'
 import AuditPanel from '../components/AuditPanel'
 import FeedbackControls from '../components/FeedbackControls'
 import MarkdownMessage from '../components/MarkdownMessage'
 import Sources from '../components/Sources'
-import type {
-  ChatMessage,
-  ChatSessionSummary,
-  FeedbackState,
-  Module,
-} from '../types'
-
-const newSessionId = () =>
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID().replace(/-/g, '')
-    : Math.random().toString(36).slice(2)
+import { useChat } from '../state/chat'
+import type { ChatSessionSummary } from '../types'
 
 function relativeTime(iso: string | null): string {
   if (!iso) return ''
@@ -52,90 +42,42 @@ function useAutoGrow(value: string) {
 }
 
 /**
- * Student workspace: the Socratic chat plus an LLM-style persistent history
- * sidebar. Sessions are saved server-side (``tutoring_sessions`` /
- * ``session_messages``) and can be reopened or deleted. The transcript itself
- * ships empty - no seeded demo turns.
+ * Student workspace: the Socratic chat plus an LLM-style history sidebar.
+ *
+ * All chat state lives in `ChatProvider` (above the router), so navigating to
+ * another tab no longer discards the transcript, the module choice or an
+ * in-flight reply. This component keeps only view-local UI state (scroll
+ * position, mobile sidebar, composer ref).
  */
 export default function StudentChat() {
-  // The dropdown renders whatever the module registry actually contains, so a
-  // module added in config.py appears here without a frontend change. MODULES is
-  // only the offline fallback.
-  const [modules, setModules] = useState<Module[]>(MODULES)
-  const [moduleId, setModuleId] = useState(() => MODULES[1].module_id)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
-  const [atBottom, setAtBottom] = useState(true)
+  const {
+    modules,
+    moduleId,
+    activeModule,
+    messages,
+    input,
+    sending,
+    sessions,
+    sessionsLoading,
+    activeSessionId,
+    loadingSession,
+    error,
+    activeModel,
+    setInput,
+    setError,
+    send,
+    startNewChat,
+    openSession,
+    removeSession,
+    changeModule,
+    updateFeedback,
+  } = useChat()
 
-  const [sessions, setSessions] = useState<ChatSessionSummary[]>([])
-  const [sessionsLoading, setSessionsLoading] = useState(true)
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
-  const [loadingSession, setLoadingSession] = useState(false)
+  const [atBottom, setAtBottom] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const composerRef = useAutoGrow(input)
-  const activeModule = useMemo(
-    () => modules.find((m) => m.module_id === moduleId) ?? modules[0],
-    [modules, moduleId],
-  )
-
-  // The model actually serving this session, taken from the most recent turn's
-  // audit. Shown in the header so the badge reflects reality rather than a
-  // hard-coded "Mock" label.
-  const activeModel = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const llm = messages[i].audit?.llm
-      if (llm) return llm
-    }
-    return null
-  }, [messages])
-
-  const refreshSessions = useCallback(async () => {
-    try {
-      setSessions(await api.listSessions())
-    } catch {
-      setSessions([])
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    void api
-      .getModules()
-      .then((live) => {
-        if (cancelled || !live.length) return
-        setModules(live)
-        setModuleId((current) =>
-          live.some((m) => m.module_id === current) ? current : live[0].module_id,
-        )
-      })
-      .catch((err) => console.error('could not load modules', err))
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    async function run() {
-      setSessionsLoading(true)
-      try {
-        const data = await api.listSessions()
-        if (!cancelled) setSessions(data)
-      } catch {
-        if (!cancelled) setSessions([])
-      } finally {
-        if (!cancelled) setSessionsLoading(false)
-      }
-    }
-    void run()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   // Only auto-scroll when the reader is already at the bottom, so scrolling back
   // through earlier turns is not yanked away by an incoming reply.
@@ -172,137 +114,26 @@ export default function StudentChat() {
     )
   }
 
-  function startNewChat() {
-    setActiveSessionId(null)
-    setMessages([])
-    setInput('')
-    setError(null)
-    setAtBottom(true)
+  function handleNewChat() {
+    startNewChat()
     setSidebarOpen(false)
     composerRef.current?.focus()
   }
 
-  async function openSession(sessionId: string) {
-    if (sessionId === activeSessionId) return
-    setLoadingSession(true)
-    setError(null)
-    try {
-      const detail = await api.getSession(sessionId)
-      setActiveSessionId(sessionId)
-      setMessages(detail.messages)
-      if (detail.session.module_id) setModuleId(detail.session.module_id)
-      setAtBottom(true)
-      setSidebarOpen(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoadingSession(false)
-    }
+  function handleOpenSession(sessionId: string) {
+    setSidebarOpen(false)
+    void openSession(sessionId)
   }
 
-  async function removeSession(sessionId: string, event: React.MouseEvent) {
+  function handleRemoveSession(sessionId: string, event: React.MouseEvent) {
     event.stopPropagation()
     if (!window.confirm('Delete this chat and its history? This cannot be undone.')) return
-    try {
-      await api.deleteSession(sessionId)
-      if (sessionId === activeSessionId) startNewChat()
-      await refreshSessions()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
+    void removeSession(sessionId)
   }
 
-  function changeModule(nextModule: string) {
-    setModuleId(nextModule)
-    // A session is scoped to one module, so switching starts a fresh chat.
-    if (activeSessionId) startNewChat()
-  }
-
-  async function send() {
-    const text = input.trim()
-    if (!text || sending) return
-
-    const sessionId = activeSessionId ?? newSessionId()
-    if (!activeSessionId) setActiveSessionId(sessionId)
-
-    const userTurn: ChatMessage = {
-      message_id: `local-${newSessionId()}`,
-      role: 'user',
-      content: text,
-    }
-    const history = messages.map((m) => ({ role: m.role, content: m.content }))
-    setMessages((prev) => [...prev, userTurn])
-    setInput('')
-    setSending(true)
+  function handleSend() {
     setAtBottom(true)
-    setError(null)
-
-    try {
-      const response = await api.chat({
-        message: text,
-        module_id: moduleId,
-        session_id: sessionId,
-        history,
-      })
-      setMessages((prev) => [
-        ...prev,
-        {
-          message_id: response.message_id,
-          role: 'assistant',
-          content: response.reply,
-          audit: {
-            intent: response.intent,
-            scaffolding: response.scaffolding,
-            guardrail: response.guardrail,
-            retrieval: response.retrieval,
-            llm: response.llm,
-            telemetry_log_id: response.telemetry_log_id,
-          },
-        },
-      ])
-
-      // Show the chat in the sidebar immediately (a brand-new session does not
-      // exist in the list yet), then reconcile with the server so titles,
-      // counts and ordering are authoritative.
-      const nowIso = new Date().toISOString()
-      setSessions((prev) => {
-        if (prev.some((s) => s.session_id === sessionId)) return prev
-        return [
-          {
-            session_id: sessionId,
-            module_id: moduleId,
-            module_name: activeModule?.module_name ?? null,
-            title: text.length > 80 ? `${text.slice(0, 80)}…` : text,
-            started_at: nowIso,
-            last_activity_at: nowIso,
-            turn_count: 1,
-            message_count: 2,
-          },
-          ...prev,
-        ]
-      })
-      await refreshSessions()
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          message_id: `error-${newSessionId()}`,
-          role: 'assistant',
-          content: `The tutoring model is unavailable.\n\n\`\`\`text\n${
-            err instanceof Error ? err.message : String(err)
-          }\n\`\`\``,
-        },
-      ])
-    } finally {
-      setSending(false)
-      composerRef.current?.focus()
-    }
-  }
-
-  function updateFeedback(messageId: string, next: FeedbackState | undefined) {
-    setMessages((prev) =>
-      prev.map((m) => (m.message_id === messageId ? { ...m, feedback: next } : m)),
-    )
+    void send().then(() => composerRef.current?.focus())
   }
 
   const hasMessages = messages.length > 0
@@ -339,7 +170,7 @@ export default function StudentChat() {
         <div className="border-b border-slate-100 p-3">
           <button
             type="button"
-            onClick={startNewChat}
+            onClick={handleNewChat}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-medium text-on-accent transition hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
@@ -375,7 +206,7 @@ export default function StudentChat() {
                     >
                       <button
                         type="button"
-                        onClick={() => void openSession(session.session_id)}
+                        onClick={() => handleOpenSession(session.session_id)}
                         className="min-w-0 flex-1 px-2.5 py-2 text-left"
                       >
                         <span
@@ -391,7 +222,7 @@ export default function StudentChat() {
                       </button>
                       <button
                         type="button"
-                        onClick={(e) => void removeSession(session.session_id, e)}
+                        onClick={(e) => handleRemoveSession(session.session_id, e)}
                         aria-label="Delete chat"
                         className="mr-1 hidden shrink-0 rounded-md p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 group-hover:block"
                       >
@@ -457,7 +288,7 @@ export default function StudentChat() {
           {hasMessages && (
             <button
               type="button"
-              onClick={startNewChat}
+              onClick={handleNewChat}
               className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -467,8 +298,15 @@ export default function StudentChat() {
         </header>
 
         {error && (
-          <div className="border-b border-rose-100 bg-rose-50 px-4 py-2 text-xs text-rose-700">
-            {error}
+          <div className="flex items-center justify-between gap-3 border-b border-rose-100 bg-rose-50 px-4 py-2 text-xs text-rose-700">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="shrink-0 font-medium text-rose-700 underline"
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
@@ -576,7 +414,7 @@ export default function StudentChat() {
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            void send()
+            handleSend()
           }}
           className="shrink-0 border-t border-slate-200 bg-white/90 px-4 py-3 backdrop-blur"
         >
@@ -589,7 +427,7 @@ export default function StudentChat() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
-                  void send()
+                  handleSend()
                 }
               }}
               rows={1}

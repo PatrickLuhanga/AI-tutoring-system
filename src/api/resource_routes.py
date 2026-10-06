@@ -191,7 +191,9 @@ def list_module_materials(module_id: str):
         per_doc = int(request.args.get("limit", 5))
     except (TypeError, ValueError):
         per_doc = 5
-    per_doc = max(1, min(per_doc, 50))
+    # A citation deep-link fetches one document's full chunk list, so the cap is
+    # high enough to cover a whole deck/chapter in one request.
+    per_doc = max(1, min(per_doc, 200))
     doc_filter = (request.args.get("doc") or "").strip()
     search = (request.args.get("q") or "").strip()
 

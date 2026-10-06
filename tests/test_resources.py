@@ -271,3 +271,21 @@ def test_materials_route_filters_by_document_and_text(client, corpus_loaded):
         ).get_json()
         assert searched["total_chunks"] >= 1
 
+
+def test_modules_endpoint_counts_match_course_material(client, corpus_loaded):
+    """The Home cards must show the same counts as the Course Material viewer.
+
+    Home reads ``GET /api/modules``; Course Material reads
+    ``GET /api/materials/<id>``. Both must agree, or the Home page shows
+    "0 documents" for a module the tutor can actually retrieve from.
+    """
+    modules = {m["module_id"]: m for m in client.get("/api/modules").get_json()["modules"]}
+    assert "IPRT301" in modules
+    home = modules["IPRT301"]
+    assert home["document_count"] > 0, "Home would show 0 documents for an ingested module"
+    assert home["chunk_count"] > 0
+
+    material = client.get("/api/materials/IPRT301?limit=1").get_json()
+    assert home["document_count"] == material["document_count"]
+    assert home["chunk_count"] == material["total_chunks"]
+

@@ -264,6 +264,10 @@ export interface Module {
   module_name: string
   course_code: string
   language: string
+  /** Distinct source documents indexed for this module (from the chunk store). */
+  document_count?: number
+  /** Total chunks indexed for this module. */
+  chunk_count?: number
 }
 
 // ---------------------------------------------------------------------------

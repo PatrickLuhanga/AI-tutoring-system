@@ -1,10 +1,16 @@
-import { BookOpen, ExternalLink } from 'lucide-react'
+import { BookOpen, ExternalLink, FileSearch } from 'lucide-react'
+import { materialHref } from '../navigation'
 import type { Citation } from '../types'
 
 interface SourcesProps {
   citations?: Citation[]
   /** True when the tutor fell back to third-party material (commercial books). */
   thirdPartyFallback?: boolean
+}
+
+/** True when a citation points at the open web rather than course material. */
+function isExternal(cite: Citation): boolean {
+  return cite.source_category === 'web' || /^https?:\/\//i.test(cite.url ?? '')
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -59,13 +65,27 @@ export default function Sources({ citations, thirdPartyFallback }: SourcesProps)
           const label =
             CATEGORY_LABEL[cite.source_category] ?? cite.source_category
           const isThirdParty = cite.source_category === 'books'
+          const external = isExternal(cite)
+          // External (web fallback) citations open in a new tab. Course-material
+          // citations deep-link into the Course Material viewer on the exact
+          // document (and section) they came from.
+          const href = external
+            ? cite.url
+            : materialHref({
+                moduleId: cite.module_id,
+                sourceFile: cite.source_file,
+                section: cite.section_title,
+              })
           return (
             <li key={cite.cite_key}>
               <a
-                href={cite.url}
-                target="_blank"
-                rel="noreferrer"
-                title={`${cite.source_file}${cite.anchor ? ` :: ${cite.anchor}` : ''}`}
+                href={href}
+                {...(external ? { target: '_blank', rel: 'noreferrer noopener' } : {})}
+                title={
+                  external
+                    ? cite.url
+                    : `Open in Course Material: ${cite.source_file}${cite.section_title ? ` :: ${cite.section_title}` : ''}`
+                }
                 className="group flex items-start gap-2 rounded px-1.5 py-1 transition hover:bg-white"
               >
                 <span
@@ -85,7 +105,11 @@ export default function Sources({ citations, thirdPartyFallback }: SourcesProps)
                     {label} · {cite.source_file}
                   </span>
                 </span>
-                <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-slate-300 group-hover:text-blue-500" />
+                {external ? (
+                  <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-slate-300 group-hover:text-blue-500" />
+                ) : (
+                  <FileSearch className="mt-0.5 h-3 w-3 shrink-0 text-slate-300 group-hover:text-blue-500" />
+                )}
               </a>
             </li>
           )

@@ -33,27 +33,12 @@ export default function Home() {
   const { user } = useSession()
   const { choice, theme } = useTheme()
   const [modules, setModules] = useState<Module[]>([])
-  const [counts, setCounts] = useState<Record<string, number>>({})
 
+  // `GET /api/modules` already carries the ingested document/chunk counts, which
+  // match the Course Material viewer. No per-module file fetch is needed.
   useEffect(() => {
     void api.getModules().then(setModules).catch(() => setModules([]))
-    // Document counts come from the corpus index; a failure here is cosmetic.
-    void (async () => {
-      try {
-        const entries = await Promise.all(
-          (modules.length ? modules : []).map(async (m) => {
-            const res = await fetch(`/api/resources/${m.module_id}`)
-            if (!res.ok) return [m.module_id, 0] as const
-            const body = await res.json()
-            return [m.module_id, (body.documents ?? []).length] as const
-          }),
-        )
-        setCounts(Object.fromEntries(entries))
-      } catch {
-        /* the library link still works without the counts */
-      }
-    })()
-  }, [modules.length])
+  }, [])
 
   const first = user?.full_name?.split(' ')[0]
 
@@ -216,9 +201,10 @@ export default function Home() {
                   {m.module_id} · {m.module_name}
                 </span>
                 <span className="block text-[11px] text-slate-400">
-                  {counts[m.module_id] != null
-                    ? `${counts[m.module_id]} document${counts[m.module_id] === 1 ? '' : 's'}`
+                  {m.document_count != null
+                    ? `${m.document_count} document${m.document_count === 1 ? '' : 's'}`
                     : m.course_code}
+                  {m.chunk_count ? ` · ${m.chunk_count.toLocaleString()} chunks` : ''}
                 </span>
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />

@@ -12,6 +12,7 @@ import {
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import NotificationBell from './components/NotificationBell'
 import { ThemeToggle } from './components/ThemeControl'
+import { parseHash } from './navigation'
 import { useSession } from './state/session'
 
 const Login = lazy(() => import('./views/Login'))
@@ -101,8 +102,10 @@ function HomeIcon({ className }: { className?: string }) {
 /** Minimal hash router - deep-linkable and dependency-free. */
 function useHashRoute(): [Route, (route: Route) => void] {
   const read = (): Route => {
-    const raw = window.location.hash.replace(/^#\/?/, '')
-    return NAV.some((n) => n.id === raw) ? (raw as Route) : 'home'
+    // `parseHash` strips any query string, so `#/material?module=...` still
+    // resolves to the `material` route.
+    const { route } = parseHash()
+    return NAV.some((n) => n.id === route) ? (route as Route) : 'home'
   }
   const [route, setRoute] = useState<Route>(read)
 
