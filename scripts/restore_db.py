@@ -175,8 +175,30 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     if use_docker:
-        return _restore_docker(args.seed, args.container, args.db, args.user)
-    return _restore_host(args.seed)
+        rc = _restore_docker(args.seed, args.container, args.db, args.user)
+    else:
+        rc = _restore_host(args.seed)
+
+    if rc == 0:
+        _reconcile_registry()
+    return rc
+
+
+def _reconcile_registry() -> None:
+    """Re-apply the module registry from ``src/config.py`` after a restore.
+
+    A dump is a snapshot: it can carry stale labels (the ``modules`` table once
+    said "Internet Programming"). ``src/config.py`` is the source of truth, so
+    upserting the registry here means a restored database always matches the
+    code, however old the seed file is.
+    """
+    try:
+        from src.setup_database import seed_modules
+
+        count = seed_modules()
+        print(f"Reconciled {count} module row(s) from src/config.py.")
+    except Exception as exc:  # noqa: BLE001 - restore already succeeded
+        print(f"[WARN] Could not reconcile the module registry: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":  # pragma: no cover
