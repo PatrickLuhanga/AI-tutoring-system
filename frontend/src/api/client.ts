@@ -20,6 +20,7 @@ import type {
   TelemetryAnalytics,
   TutorQuestionsResponse,
   TutorStrugglesResponse,
+  TutorSummaryResponse,
 } from '../types'
 import {
   MOCK,
@@ -293,6 +294,17 @@ export const api = {
     query.set('fallback', params.fallback === false ? 'false' : 'true')
     if (params.moduleId) query.set('module_id', params.moduleId)
     return http<TutorQuestionsResponse>(`/api/tutor/questions?${query.toString()}`)
+  },
+
+  /** `GET /api/tutor/questions/summary` - per-status queue counts. */
+  async getTutorSummary(): Promise<TutorSummaryResponse> {
+    if (USE_MOCK) {
+      return delay({
+        scope: { role: 'tutor', is_admin: false, modules: [] },
+        counts: {},
+      })
+    }
+    return http<TutorSummaryResponse>('/api/tutor/questions/summary')
   },
 
   /**

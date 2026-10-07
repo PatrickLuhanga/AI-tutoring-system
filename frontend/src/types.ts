@@ -466,6 +466,20 @@ export interface TutorStrugglesResponse {
   struggles: TutorStruggle[]
 }
 
+/** Per-status queue counts from `GET /api/tutor/questions/summary`. */
+export interface TutorQueueCount {
+  questions: number
+  occurrences: number
+}
+
+export interface TutorSummaryResponse {
+  scope: TutorScopeInfo
+  counts: Record<string, TutorQueueCount>
+  open_total?: number
+  open_occurrences?: number
+  answered_total?: number
+}
+
 /** Human labels for why a question left the module's own material. */
 export const FALLBACK_REASON_LABELS: Record<string, string> = {
   no_context: 'nothing in the module matched',

@@ -17,7 +17,20 @@ import {
   TrendingUp,
   Upload,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { api } from '../api/client'
 import { ThemeSegmented } from '../components/ThemeControl'
 import { useTheme } from '../state/theme'
@@ -27,7 +40,11 @@ import {
   type Module,
   type TutorFallbackQuestion,
   type TutorStrugglesResponse,
+  type TutorSummaryResponse,
 } from '../types'
+
+/** Palette for the telemetry charts, matching the Admin dashboard. */
+const CHART_COLORS = ['#6366f1', '#f59e0b', '#ec4899', '#14b8a6', '#8b5cf6', '#0ea5e9']
 
 /**
  * The landing page.
@@ -39,8 +56,23 @@ import {
  */
 export default function Home() {
   const { user } = useSession()
-  if (user?.role === 'tutor' || user?.role === 'lecturer') {
-    return <StaffHome moduleId={user.modules?.[0] ?? null} role={user.role} />
+  // Normalise the role so a capitalised or padded value (e.g. "Lecturer ")
+  // still routes staff to their dashboard.
+  const role = (user?.role ?? '').toLowerCase().trim()
+  const isStaff = role === 'tutor' || role === 'lecturer'
+
+  useEffect(() => {
+    // Diagnostic: verify the active role the dashboard branches on.
+    console.log('[Home] session user:', user, '→ role:', role, 'isStaff:', isStaff)
+  }, [user, role, isStaff])
+
+  if (isStaff) {
+    return (
+      <StaffHome
+        moduleId={user?.modules?.[0] ?? null}
+        role={role === 'lecturer' ? 'lecturer' : 'tutor'}
+      />
+    )
   }
   return <StudentHome />
 }
@@ -59,6 +91,7 @@ function StaffHome({
   const { user } = useSession()
   const { choice, theme } = useTheme()
   const [questions, setQuestions] = useState<TutorFallbackQuestion[]>([])
+  const [summary, setSummary] = useState<TutorSummaryResponse | null>(null)
   const [struggles, setStruggles] = useState<TutorStrugglesResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -67,17 +100,25 @@ function StaffHome({
     let cancelled = false
     setLoading(true)
     setError(null)
-    Promise.all([
+    // `allSettled`: one telemetry endpoint being unavailable (or empty) must not
+    // blank the whole dashboard - each widget degrades to its own empty state.
+    Promise.allSettled([
       api.getTutorQuestions({ status: 'open', moduleId: moduleId ?? undefined }),
+      api.getTutorSummary(),
       api.getTutorStruggles({ moduleId: moduleId ?? undefined }),
     ])
-      .then(([queue, friction]) => {
+      .then(([queue, summaryResult, frictionResult]) => {
         if (cancelled) return
-        setQuestions(queue.questions)
-        setStruggles(friction)
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+        if (queue.status === 'fulfilled') setQuestions(queue.value?.questions ?? [])
+        if (summaryResult.status === 'fulfilled') setSummary(summaryResult.value ?? null)
+        if (frictionResult.status === 'fulfilled') setStruggles(frictionResult.value ?? null)
+        const failed = [queue, summaryResult, frictionResult].find(
+          (result) => result.status === 'rejected',
+        )
+        if (failed && failed.status === 'rejected') {
+          const reason = failed.reason
+          setError(reason instanceof Error ? reason.message : String(reason))
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -87,13 +128,48 @@ function StaffHome({
     }
   }, [moduleId])
 
+  // Defensive defaults: the telemetry tables may be empty, and any endpoint may
+  // return a partial shape. Nothing below assumes a non-null response.
+  const fallbackList = questions ?? []
+  const openCounts = summary?.counts?.open
+  const fallbackCount = openCounts?.questions ?? fallbackList.length
+  const totalOccurrences =
+    openCounts?.occurrences ?? fallbackList.reduce((sum, q) => sum + (q.occurrences ?? 0), 0)
+  const frictionList = struggles?.struggles ?? []
+  const frictionTurns =
+    struggles?.total_turns ?? frictionList.reduce((sum, s) => sum + (s.turns ?? 0), 0)
+  const threshold = struggles?.threshold ?? 2
+
   // Most recent first, for the "Recent Fallback Queries" widget.
-  const recent = [...questions]
+  const recent = [...fallbackList]
     .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
     .slice(0, 6)
-  const totalOccurrences = questions.reduce((sum, q) => sum + q.occurrences, 0)
-  const frictionTurns = struggles?.total_turns ?? 0
   const first = user?.full_name?.split(' ')[0]
+
+  // Pie: why students fell through, weighted by how often each query recurred.
+  const fallbackReasonData = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const q of questions ?? []) {
+      const key = q.reason || 'unknown'
+      counts.set(key, (counts.get(key) ?? 0) + (q.occurrences ?? 1))
+    }
+    return [...counts.entries()]
+      .map(([reason, value]) => ({
+        name: FALLBACK_REASON_LABELS[reason] ?? reason.replace(/_/g, ' '),
+        value,
+      }))
+      .sort((a, b) => b.value - a.value)
+  }, [questions])
+
+  // Bars: which intents needed the deepest scaffolding.
+  const frictionData = useMemo(
+    () =>
+      (struggles?.struggles ?? []).map((s) => ({
+        name: s.intent ? s.intent.replace(/_/g, ' ') : 'unclassified',
+        value: s.turns ?? 0,
+      })),
+    [struggles],
+  )
 
   return (
     <div className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
@@ -123,7 +199,7 @@ function StaffHome({
           icon={<AlertTriangle className="h-4 w-4" />}
           tone="amber"
           label="Web Fallback Queries"
-          value={loading ? '—' : questions.length}
+          value={loading ? '—' : fallbackCount}
           detail={
             loading
               ? 'questions that left the module notes'
@@ -135,10 +211,77 @@ function StaffHome({
           tone="blue"
           label="Student Friction Turns"
           value={loading ? '—' : frictionTurns}
-          detail={
-            loading ? 'turns needing deep hints' : `hint depth ≥ ${struggles?.threshold ?? 2}`
-          }
+          detail={loading ? 'turns needing deep hints' : `hint depth ≥ ${threshold}`}
         />
+      </section>
+
+      {/* Charts */}
+      <section className="mb-8 grid gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Why students fell through"
+          subtitle="Student questions by fallback reason, weighted by how often they recurred."
+        >
+          {loading ? (
+            <ChartEmpty>
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            </ChartEmpty>
+          ) : fallbackReasonData.length === 0 ? (
+            <ChartEmpty>No fallback queries logged yet for this module.</ChartEmpty>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie
+                  data={fallbackReasonData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={52}
+                  outerRadius={92}
+                  paddingAngle={2}
+                  label={({ value }) => value}
+                  labelLine={false}
+                >
+                  {fallbackReasonData.map((entry, index) => (
+                    <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
+                />
+                <Legend
+                  verticalAlign="bottom"
+                  height={36}
+                  formatter={(value) => <span className="text-xs text-slate-600">{value}</span>}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
+
+        <ChartCard
+          title="Friction by topic"
+          subtitle={`Student turns that needed ${threshold}+ hint rounds, by intent.`}
+        >
+          {loading ? (
+            <ChartEmpty>
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+            </ChartEmpty>
+          ) : frictionData.length === 0 ? (
+            <ChartEmpty>No student friction logged yet for this module.</ChartEmpty>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={frictionData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                <Tooltip
+                  cursor={{ fill: '#f1f5f9' }}
+                  contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
+                />
+                <Bar dataKey="value" fill="#3b82f6" radius={[6, 6, 0, 0]} maxBarSize={56} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </ChartCard>
       </section>
 
       {/* Recent fallback queries */}
@@ -175,7 +318,7 @@ function StaffHome({
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                   <span>{when(q.created_at)}</span>
                   <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-500">
-                    {q.occurrences}×
+                    {q.occurrences ?? 0}×
                   </span>
                   <span>{FALLBACK_REASON_LABELS[q.reason] ?? q.reason}</span>
                 </p>
@@ -195,11 +338,11 @@ function StaffHome({
         </h2>
         {loading ? (
           <Loading label="Loading friction turns…" />
-        ) : (struggles?.struggles.length ?? 0) === 0 ? (
-          <Empty>No topic reached a deep hint level yet. That is the good outcome.</Empty>
+        ) : frictionList.length === 0 ? (
+          <Empty>No student friction logged yet for this module.</Empty>
         ) : (
           <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            {struggles?.struggles.map((s) => (
+            {frictionList.map((s) => (
               <li
                 key={`${s.module_id}-${s.intent}`}
                 className="flex items-center gap-3 px-4 py-2.5"
@@ -213,13 +356,17 @@ function StaffHome({
                   </span>
                 </span>
                 <span className="shrink-0 text-right">
-                  <span className="block text-sm font-semibold text-slate-800">{s.turns}</span>
+                  <span className="block text-sm font-semibold text-slate-800">
+                    {s.turns ?? 0}
+                  </span>
                   <span className="block text-[10px] uppercase text-slate-400">turns</span>
                 </span>
                 <span className="shrink-0 text-right">
-                  <span className="block text-sm text-slate-700">depth {s.max_hint_depth}</span>
+                  <span className="block text-sm text-slate-700">
+                    depth {s.max_hint_depth ?? 0}
+                  </span>
                   <span className="block text-[10px] uppercase text-slate-400">
-                    avg {s.avg_hint_depth}
+                    avg {s.avg_hint_depth ?? 0}
                   </span>
                 </span>
               </li>
@@ -296,6 +443,32 @@ function StatCard({
       </div>
       <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
       <p className="mt-0.5 text-xs text-slate-400">{detail}</p>
+    </div>
+  )
+}
+
+function ChartCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string
+  subtitle: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-1 text-base font-semibold text-slate-800">{title}</h2>
+      <p className="mb-4 text-xs text-slate-400">{subtitle}</p>
+      {children}
+    </div>
+  )
+}
+
+function ChartEmpty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex h-[260px] items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 px-4 text-center text-sm text-slate-400">
+      {children}
     </div>
   )
 }
