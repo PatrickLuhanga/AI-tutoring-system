@@ -53,16 +53,24 @@ export default function Practice() {
   const bankSize = useRef<number | null>(null)
 
   const isStaff = Boolean(user?.is_staff)
+  const isScoped = user?.role === 'tutor' || user?.role === 'lecturer'
+  const assigned = user?.modules ?? []
+  const assignedKey = assigned.join(',')
 
   useEffect(() => {
     void api
       .getModules()
       .then((live) => {
-        setModules(live)
-        if (live.length) setModuleId(live[0].module_id)
+        const usable =
+          isScoped && assigned.length
+            ? live.filter((m) => assigned.includes(m.module_id))
+            : live
+        setModules(usable)
+        if (usable.length) setModuleId(usable[0].module_id)
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isScoped, assignedKey])
 
   async function draw() {
     setLoading(true)
@@ -123,17 +131,23 @@ export default function Practice() {
       <div className="mb-4 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <label className="text-xs font-medium text-slate-600">
           Module
-          <select
-            value={moduleId}
-            onChange={(e) => setModuleId(e.target.value)}
-            className="mt-1 block rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-700"
-          >
-            {modules.map((m) => (
-              <option key={m.module_id} value={m.module_id}>
-                {m.module_id} · {m.module_name}
-              </option>
-            ))}
-          </select>
+          {isScoped ? (
+            <span className="mt-1 block rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm font-medium text-slate-600">
+              {modules[0] ? `${modules[0].module_id} · ${modules[0].module_name}` : '—'}
+            </span>
+          ) : (
+            <select
+              value={moduleId}
+              onChange={(e) => setModuleId(e.target.value)}
+              className="mt-1 block rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-700"
+            >
+              {modules.map((m) => (
+                <option key={m.module_id} value={m.module_id}>
+                  {m.module_id} · {m.module_name}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
         <label className="text-xs font-medium text-slate-600">
           Questions

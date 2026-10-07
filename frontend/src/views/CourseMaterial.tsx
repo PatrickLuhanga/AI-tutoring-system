@@ -9,6 +9,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { useHashParams } from '../navigation'
+import { useSession } from '../state/session'
 import type { MaterialDocument, Module, ModuleMaterials } from '../types'
 
 /** Reading order and human labels for a document's provenance category. */
@@ -36,6 +37,7 @@ function categoryRank(category: string): number {
  * their section headings and token counts.
  */
 export default function CourseMaterial() {
+  const { user } = useSession()
   const [modules, setModules] = useState<Module[]>([])
   const [active, setActive] = useState<string | null>(null)
   const [materials, setMaterials] = useState<ModuleMaterials | null>(null)
@@ -58,23 +60,34 @@ export default function CourseMaterial() {
   // Guards the scroll/expand/pulse so it fires once per distinct citation target.
   const handledTarget = useRef<string | null>(null)
 
+  // A tutor's or lecturer's library is locked to what they teach; the module
+  // pills would only offer a dead end, so they are hidden for those roles.
+  const isScoped = user?.role === 'tutor' || user?.role === 'lecturer'
+  const assigned = user?.modules ?? []
+  const assignedKey = assigned.join(',')
+
   useEffect(() => {
+    setLoading(true)
     void api
       .getModules()
       .then((live) => {
-        setModules(live)
-        // Prefer a deep-linked module; fall back to the first.
+        const usable =
+          isScoped && assigned.length
+            ? live.filter((m) => assigned.includes(m.module_id))
+            : live
+        setModules(usable)
+        // Prefer a deep-linked module (within the caller's scope); fall back to
+        // the first. A reader sandboxed to one module simply gets that module.
         const wanted =
-          linkModule && live.some((m) => m.module_id === linkModule)
+          linkModule && usable.some((m) => m.module_id === linkModule)
             ? linkModule
-            : live[0]?.module_id
+            : usable[0]?.module_id
         if (wanted) setActive(wanted)
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false))
-    // Run once on mount; the module effect below handles later deep-link changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isScoped, assignedKey])
 
   // A deep-link can arrive while the view is already mounted (a second citation
   // click): switch to the requested module.
@@ -201,23 +214,34 @@ export default function CourseMaterial() {
 
       {!loading && modules.length > 0 && (
         <>
-          {/* Module tabs */}
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {modules.map((m) => (
-              <button
-                key={m.module_id}
-                type="button"
-                onClick={() => setActive(m.module_id)}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-                  active === m.module_id
-                    ? 'border-blue-400 bg-blue-50 text-blue-800'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {m.module_id}
-              </button>
-            ))}
-          </div>
+          {/* Module tabs — a tutor/lecturer sees only the module they teach. */}
+          {isScoped ? (
+            <div className="mb-4 inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
+              <span className="font-mono">
+                {current ? `${current.module_id} · ${current.module_name}` : ''}
+              </span>
+              <span className="text-[10px] uppercase tracking-wide text-slate-400">
+                locked to your module
+              </span>
+            </div>
+          ) : (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {modules.map((m) => (
+                <button
+                  key={m.module_id}
+                  type="button"
+                  onClick={() => setActive(m.module_id)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                    active === m.module_id
+                      ? 'border-blue-400 bg-blue-50 text-blue-800'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {m.module_id}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-medium text-slate-700">

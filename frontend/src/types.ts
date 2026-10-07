@@ -413,3 +413,64 @@ export interface TelemetryAnalytics {
   by_module: SatisfactionPoint[]
   average_latency_ms: number
 }
+
+// ---------------------------------------------------------------------------
+// Tutor telemetry — fallback queries and high hint-depth "struggles"
+// ---------------------------------------------------------------------------
+
+/** A queued question that missed the module's own material (GET /api/tutor/questions). */
+export interface TutorFallbackQuestion {
+  question_id: number
+  module_id: string | null
+  question_text: string
+  intent: string | null
+  reason: string
+  best_distance: number | null
+  occurrences: number
+  status: string
+  answer_text: string | null
+  answered_at?: string | null
+  promoted_chunk_id?: number | null
+  created_at: string | null
+}
+
+export interface TutorScopeInfo {
+  role: string
+  is_admin: boolean
+  modules: string[]
+}
+
+export interface TutorQuestionsResponse {
+  scope: TutorScopeInfo
+  status: string
+  fallback?: boolean
+  count: number
+  questions: TutorFallbackQuestion[]
+}
+
+/** One module/intent bucket of turns that needed deep scaffolding. */
+export interface TutorStruggle {
+  module_id: string | null
+  intent: string | null
+  turns: number
+  max_hint_depth: number
+  avg_hint_depth: number
+  latest_at: string | null
+}
+
+export interface TutorStrugglesResponse {
+  scope: TutorScopeInfo
+  module_id: string | null
+  threshold: number
+  total_turns: number
+  struggles: TutorStruggle[]
+}
+
+/** Human labels for why a question left the module's own material. */
+export const FALLBACK_REASON_LABELS: Record<string, string> = {
+  no_context: 'nothing in the module matched',
+  below_threshold: 'only weak matches',
+  third_party_only: 'answered from a textbook, not the notes',
+  low_confidence: 'grounding looked weak',
+  student_flagged: 'the student said it was wrong',
+}

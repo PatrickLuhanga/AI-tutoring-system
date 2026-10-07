@@ -18,6 +18,8 @@ import type {
   ModuleMaterials,
   OllamaModelsResponse,
   TelemetryAnalytics,
+  TutorQuestionsResponse,
+  TutorStrugglesResponse,
 } from '../types'
 import {
   MOCK,
@@ -272,7 +274,53 @@ export const api = {
   },
 
   /**
-   * `GET /api/admin/analytics` - telemetry aggregate for the dashboards.
+   * `GET /api/tutor/questions` - fallback queries for the caller's modules.
+   * The API applies the module scope from the session, never the caller.
+   */
+  async getTutorQuestions(
+    params: { status?: string; moduleId?: string; fallback?: boolean } = {},
+  ): Promise<TutorQuestionsResponse> {
+    if (USE_MOCK) {
+      return delay({
+        scope: { role: 'tutor', is_admin: false, modules: [] },
+        status: params.status ?? 'open',
+        count: 0,
+        questions: [],
+      })
+    }
+    const query = new URLSearchParams()
+    query.set('status', params.status ?? 'open')
+    query.set('fallback', params.fallback === false ? 'false' : 'true')
+    if (params.moduleId) query.set('module_id', params.moduleId)
+    return http<TutorQuestionsResponse>(`/api/tutor/questions?${query.toString()}`)
+  },
+
+  /**
+   * `GET /api/tutor/struggles` - turns that reached a deep hint level,
+   * grouped by module and intent for the tutor telemetry dashboard.
+   */
+  async getTutorStruggles(
+    params: { moduleId?: string; limit?: number } = {},
+  ): Promise<TutorStrugglesResponse> {
+    if (USE_MOCK) {
+      return delay({
+        scope: { role: 'tutor', is_admin: false, modules: [] },
+        module_id: params.moduleId ?? null,
+        threshold: 2,
+        total_turns: 0,
+        struggles: [],
+      })
+    }
+    const query = new URLSearchParams()
+    if (params.moduleId) query.set('module_id', params.moduleId)
+    if (params.limit) query.set('limit', String(params.limit))
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return http<TutorStrugglesResponse>(`/api/tutor/struggles${suffix}`)
+  },
+
+  /**
+   * Telemetry aggregate for the Admin dashboard (aggregating `telemetry_logs`
+   * and `hint_feedback`).
    */
   async getAnalytics(): Promise<TelemetryAnalytics> {
     if (USE_MOCK) {

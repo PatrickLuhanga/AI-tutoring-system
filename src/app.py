@@ -18,6 +18,7 @@ Routes
 ``GET/POST /api/admin/llm-config``  switch Cloud <-> Local LLM, rotate API key
 ``GET  /api/admin/ollama-models``   list local Ollama models for the dropdown
 ``GET  /api/tutor/questions``       queue of questions RAG could not ground
+``GET  /api/tutor/struggles``       high hint-depth turns for the tutor dashboard
 ``POST /api/tutor/questions/<id>/answer``  answer one, optionally promoting it
 """
 

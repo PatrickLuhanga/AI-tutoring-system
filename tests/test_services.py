@@ -28,7 +28,6 @@ def _purge():
         Question,
         UploadedDocument,
         User,
-        UserModuleAccess,
     )
     from sqlalchemy import select
 
@@ -38,12 +37,25 @@ def _purge():
         svc_user_ids = select(User.user_id).where(User.email.like("svc-%"))
         session.execute(delete(Question).where(Question.created_by.in_(svc_user_ids)))
         session.execute(delete(PracticeAttempt).where(PracticeAttempt.user_id.in_(svc_user_ids)))
+        # Scope every cleanup to the accounts this suite created. A blanket
+        # `delete(UserModuleAccess)` (or Notification/UploadedDocument) wiped
+        # module scope and uploads for real seeded accounts too.
+        svc_notification_ids = select(Notification.notification_id).where(
+            Notification.created_by.in_(svc_user_ids)
+        )
+        session.execute(
+            delete(NotificationRead).where(
+                NotificationRead.notification_id.in_(svc_notification_ids)
+            )
+        )
+        session.execute(delete(Notification).where(Notification.created_by.in_(svc_user_ids)))
+        session.execute(
+            delete(UploadedDocument).where(UploadedDocument.uploaded_by.in_(svc_user_ids))
+        )
         for prefix in PREFIXES:
             session.execute(delete(User).where(User.email.like(f"{prefix}%")))
-        session.execute(delete(NotificationRead))
-        session.execute(delete(Notification))
-        session.execute(delete(UploadedDocument))
-        session.execute(delete(UserModuleAccess))
+        # ``user_module_access`` rows fall with their user via ON DELETE CASCADE,
+        # so they must not be deleted wholesale.
         # Directory rows and enrolments created to exercise module scoping.
         from src.models import Enrollment, Student
 

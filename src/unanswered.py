@@ -24,7 +24,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -195,13 +195,22 @@ def list_questions(
     *,
     status: str = "open",
     module_id: Optional[str] = None,
+    reasons: Optional[Sequence[str]] = None,
     limit: int = 100,
 ) -> list[dict]:
-    """Return the tutor's queue, most-demanded first."""
+    """Return the tutor's queue, most-demanded first.
+
+    ``reasons`` narrows the queue to given failure reasons. The tutor-facing
+    "Fallback Queries" view passes the web-fallback reasons so the queue shows
+    only the questions that missed the module's own notes, not every question a
+    tutor happened to escalate.
+    """
     with session_scope() as session:
         stmt = select(UnansweredQuestion)
         if status and status != "all":
             stmt = stmt.where(UnansweredQuestion.status == status)
+        if reasons:
+            stmt = stmt.where(UnansweredQuestion.reason.in_(list(reasons)))
         if not scope.is_admin:
             if not scope.module_ids:
                 return []

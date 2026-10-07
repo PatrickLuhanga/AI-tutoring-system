@@ -14,7 +14,7 @@ import argparse
 import logging
 import sys
 
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import delete, func, inspect, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from .db import engine, ensure_database_exists
@@ -25,11 +25,29 @@ from .models import (
     Base,
     LLMConfig,
     Module,
+    User,
+    UserModuleAccess,
 )
 from .config import settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(message)s")
 logger = logging.getLogger("setup_database")
+
+#: Staff accounts whose module scope is pinned in code, so every environment
+#: agrees on what a role may see (navbar pill, API scoping and dashboards all
+#: read ``user_module_access``). Matched on the login account only; the role
+#: guard keeps a same-named student from being caught by the name.
+#:
+#: Sbusiso Luhanga is a RESK301 lecturer. IPRT301 must never attach to the
+#: account, so the scope is declared as the full set and reconciled below.
+STAFF_MODULE_SCOPE: tuple[dict[str, object], ...] = (
+    {
+        "email": "sbuda@dut.ac.za",
+        "full_name": "Sbusiso Luhanga",
+        "role": "lecturer",
+        "modules": ("RESK301",),
+    },
+)
 
 
 def create_extension() -> None:
@@ -255,6 +273,46 @@ def seed_llm_config() -> int:
     return 1
 
 
+def seed_staff_module_scope() -> int:
+    """Pin known staff accounts to their exact modules (idempotent).
+
+    Reconciles ``user_module_access`` to the declared set: any module not in
+    :data:`STAFF_MODULE_SCOPE` (e.g. a stale IPRT301 grant) is removed, and every
+    declared module is (re)inserted. Safe to run on every setup.
+    """
+    pinned = 0
+    try:
+        with engine.begin() as conn:
+            for entry in STAFF_MODULE_SCOPE:
+                user_id = conn.execute(
+                    select(User.user_id).where(
+                        User.role == entry["role"],
+                        or_(
+                            func.lower(User.email) == str(entry["email"]).lower(),
+                            func.lower(User.full_name) == str(entry["full_name"]).lower(),
+                        ),
+                    ).limit(1)
+                ).scalar_one_or_none()
+                if user_id is None:
+                    continue
+                user_id = int(user_id)
+                conn.execute(
+                    delete(UserModuleAccess).where(UserModuleAccess.user_id == user_id)
+                )
+                for module_id in entry["modules"]:
+                    conn.execute(
+                        pg_insert(UserModuleAccess)
+                        .values(user_id=user_id, module_id=module_id)
+                        .on_conflict_do_nothing(constraint="uq_user_module")
+                    )
+                pinned += 1
+    except Exception as exc:  # noqa: BLE001 - setup should not fail on a missing table
+        logger.warning("Could not pin staff module scope: %s", exc)
+    if pinned:
+        logger.info("Pinned module scope for %d staff account(s)", pinned)
+    return pinned
+
+
 def print_summary() -> None:
     inspector = inspect(engine)
     logger.info("Tables in %s:", settings.db_schema)
@@ -288,6 +346,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_modules:
         seed_modules()
     seed_llm_config()
+    seed_staff_module_scope()
     print_summary()
     logger.info("Database schema initialisation complete.")
     return 0

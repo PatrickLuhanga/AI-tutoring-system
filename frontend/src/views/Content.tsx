@@ -41,6 +41,9 @@ export default function Content() {
   const [ok, setOk] = useState<string | null>(null)
 
   const scoped = user?.role === 'admin' ? undefined : user?.modules
+  // A tutor or lecturer authors only for the module they teach, so the module
+  // picker is replaced with a locked label rather than offering other modules.
+  const isScopedStaff = user?.role === 'tutor' || user?.role === 'lecturer'
   useEffect(() => {
     void api
       .getModules()
@@ -84,17 +87,25 @@ export default function Content() {
             </button>
           ))}
         </div>
-        <select
-          value={moduleId}
-          onChange={(e) => setModuleId(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-700"
-        >
-          {modules.map((m) => (
-            <option key={m.module_id} value={m.module_id}>
-              {m.module_id} · {m.module_name}
-            </option>
-          ))}
-        </select>
+        {isScopedStaff ? (
+          <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm font-medium text-slate-600">
+            {modules[0]
+              ? `${modules[0].module_id} · ${modules[0].module_name}`
+              : 'No module assigned'}
+          </span>
+        ) : (
+          <select
+            value={moduleId}
+            onChange={(e) => setModuleId(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-700"
+          >
+            {modules.map((m) => (
+              <option key={m.module_id} value={m.module_id}>
+                {m.module_id} · {m.module_name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {error && (
@@ -110,7 +121,15 @@ export default function Content() {
 
       {tab === 'bank' && <BankTab moduleId={moduleId} onError={setError} onOk={setOk} />}
       {tab === 'generate' && <GenerateTab moduleId={moduleId} onError={setError} onOk={setOk} />}
-      {tab === 'upload' && <UploadTab moduleId={moduleId} modules={modules} onError={setError} onOk={setOk} />}
+      {tab === 'upload' && (
+        <UploadTab
+          moduleId={moduleId}
+          modules={modules}
+          role={user?.role ?? 'student'}
+          onError={setError}
+          onOk={setOk}
+        />
+      )}
       {tab === 'announce' && <AnnounceTab moduleId={moduleId} modules={modules} onError={setError} onOk={setOk} />}
     </div>
   )
@@ -410,9 +429,9 @@ function GenerateTab({ moduleId, onError, onOk }: { moduleId: string; onError: (
         {source === 'corpus'
           ? `Draws on the lecture material already ingested for ${moduleId}. Commercial textbooks are excluded, so questions come from your own notes.`
           : 'Paste a section of material and the model will draft questions from exactly that.'}{' '}
-        This runs on the local model, which generates only a few tokens a second on this
-        machine, so expect it to take a while. Every question lands in the bank flagged as
-        AI-made, for you to review before a student can be issued it.
+        Generates draft practice questions grounded in your module's ingested notes. Every
+        question lands in the bank flagged as AI-made, for you to review before a student can be
+        issued it.
       </p>
 
       {source === 'paste' && (
@@ -459,15 +478,18 @@ function GenerateTab({ moduleId, onError, onOk }: { moduleId: string; onError: (
 function UploadTab({
   moduleId,
   modules,
+  role,
   onError,
   onOk,
 }: {
   moduleId: string
   modules: Module[]
+  role: string
   onError: (s: string) => void
   onOk: (s: string) => void
 }) {
-  const [category, setCategory] = useState('notes')
+  const isTutor = role === 'tutor'
+  const [category, setCategory] = useState(isTutor ? 'exercises' : 'notes')
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [rows, setRows] = useState<UploadedDoc[]>([])
@@ -523,6 +545,13 @@ function UploadTab({
 
   return (
     <div className="space-y-4">
+      {isTutor && (
+        <p className="rounded-xl bg-blue-50 px-3 py-2.5 text-xs leading-relaxed text-blue-800 ring-1 ring-blue-200">
+          As a tutor you may only upload <strong>tutorial exercise sheets</strong>,{' '}
+          <strong>practical walkthroughs</strong>, or <strong>past test solutions</strong>.
+          Official core lecture slides and syllabus packs are managed by lecturers.
+        </p>
+      )}
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-xs font-medium text-slate-600">
@@ -532,9 +561,19 @@ function UploadTab({
               onChange={(e) => setCategory(e.target.value)}
               className="mt-1 block rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
             >
-              <option value="notes">Lecture notes (become course material)</option>
-              <option value="past_paper">Past paper / exam</option>
-              <option value="exercises">Exercise sheet</option>
+              {isTutor ? (
+                <>
+                  <option value="exercises">Tutorial exercise sheet</option>
+                  <option value="notes">Practical walkthrough</option>
+                  <option value="past_paper">Past test solutions</option>
+                </>
+              ) : (
+                <>
+                  <option value="notes">Lecture notes (become course material)</option>
+                  <option value="past_paper">Past paper / exam</option>
+                  <option value="exercises">Exercise sheet</option>
+                </>
+              )}
             </select>
           </label>
           <label className="flex-1 text-xs font-medium text-slate-600">

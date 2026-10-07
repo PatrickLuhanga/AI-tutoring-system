@@ -46,7 +46,9 @@ const NAV: NavItem[] = [
     id: 'chat',
     label: 'Tutor Chat',
     icon: <GraduationCap className="h-4 w-4" />,
-    show: () => true,
+    // A tutor or lecturer manages the module's material, not the student's side
+    // of the conversation, so the student chat is hidden for those roles.
+    show: (role) => role !== 'tutor' && role !== 'lecturer',
   },
   {
     id: 'material',
@@ -62,7 +64,7 @@ const NAV: NavItem[] = [
   },
   {
     id: 'tutor',
-    label: 'Help Queue',
+    label: 'Fallback Queries',
     icon: <LayoutDashboard className="h-4 w-4" />,
     show: (role) => canUseTutorQueueRole(role),
   },
