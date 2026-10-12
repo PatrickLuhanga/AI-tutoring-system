@@ -15,7 +15,6 @@ There is no material anywhere in this repository that would let anyone answer
 fiction would mark correct student answers wrong.
 
 So questions fall into three tiers:
-
 ``grounded``
     The notes cover it. The answer is written *from the retrieved passages*, and
     the label records that it was.
