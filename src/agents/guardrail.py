@@ -29,7 +29,6 @@ _CODE_LINE_RE = re.compile(
     r"[\w<>\[\]]+\s+\w+\s*=\s*new\b|back\s*=\s)"
 )
 #: Phrasings that hand over a finished artefact.
-#:
 #: The adjective run is ``{0,2}`` rather than a single word because "the complete
 #: working solution" and "the final working code" are ordinary English and both
 #: slipped past a single-adjective pattern - verified with a live audit, where
